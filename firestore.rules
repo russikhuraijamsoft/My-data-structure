@@ -1,0 +1,86 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function hasRole(role) {
+      return isAuthenticated() && 
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             role in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.roles;
+    }
+    
+    function isOwner() {
+      return hasRole('OWNER');
+    }
+    
+    function isAdmin() {
+      return hasRole('ADMIN') || hasRole('OWNER');
+    }
+    
+    function isManager() {
+      return hasRole('MANAGER') || isAdmin();
+    }
+
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (request.auth.uid == userId || isManager());
+      allow write: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+    }
+    
+    match /config/{document=**} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+    
+    match /pos_products/{productId} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
+
+    match /menu_item_sizes/{sizeId} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
+
+    match /orders/{orderId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
+      allow delete: if isAdmin();
+    }
+
+    match /pos_orders/{orderId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
+      allow delete: if isAdmin();
+    }
+
+    match /tickets/{ticketId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    match /stations/{stationId} {
+      allow read, write: if isAuthenticated();
+    }
+    
+    match /inventory/{itemId} {
+      allow read: if isAuthenticated();
+      allow write: if isManager();
+    }
+    
+    match /hr/{document=**} {
+      allow read, write: if isAdmin() || hasRole('HR');
+    }
+    
+    match /finance/{document=**} {
+      allow read, write: if isAdmin() || hasRole('ACCOUNTANT');
+    }
+    
+    match /{document=**} {
+      allow read, write: if isAuthenticated();
+    }
+  }
+}

@@ -1,0 +1,31 @@
+# ==============================================================================
+# TalkOS Restaurant Enterprise ERP - Google App Engine Configuration
+# ==============================================================================
+runtime: nodejs22
+instance_class: F2
+
+automatic_scaling:
+  min_instances: 0
+  max_instances: 5
+  target_cpu_utilization: 0.65
+
+env_variables:
+  NODE_ENV: 'production'
+  GCP_PROJECT_ID: 'cricket-closet-imphal'
+  GCP_REGION: 'asia-southeast1'
+  VITE_FIREBASE_DATABASE_ID: 'ai-studio-talkosarchitectu-438c4707-59bb-4b28-aa84-26b8ca15c574'
+
+handlers:
+  - url: /api/.*
+    script: auto
+    secure: always
+
+  - url: /(.*\.(js|css|png|jpg|jpeg|gif|svg|ico|json|woff2|woff|ttf))$
+    static_files: dist/\1
+    upload: dist/.*\.(js|css|png|jpg|jpeg|gif|svg|ico|json|woff2|woff|ttf)$
+    secure: always
+
+  - url: /.*
+    static_files: dist/index.html
+    upload: dist/index.html
+    secure: always
