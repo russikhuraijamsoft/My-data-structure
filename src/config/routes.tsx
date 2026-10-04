@@ -54,7 +54,7 @@ import { AdminPage } from '../features/admin/pages/AdminPage';
 
 // Auth Guard
 function RequireAuth({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth();
+  const { user, profile, loading, logout } = useAuth();
 
   if (loading) {
     return <SplashScreen />;
@@ -62,6 +62,14 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
 
   if (!user) {
     return <Navigate to="/auth" replace />;
+  }
+
+  if (!profile?.roles?.length) {
+    return <main className="min-h-screen flex flex-col items-center justify-center gap-4 p-6 text-center">
+      <h1 className="text-xl font-bold">Your account is awaiting access</h1>
+      <p>Ask the restaurant owner to assign your role and branch.</p>
+      <button onClick={() => void logout()} className="rounded bg-[#800000] px-4 py-2 text-white">Sign out</button>
+    </main>;
   }
 
   return <>{children}</>;

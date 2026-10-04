@@ -84,27 +84,7 @@ class KdsService {
         snapshot.forEach((doc) => {
           tickets.push({ id: doc.id, ...doc.data() } as Ticket);
         });
-        if (tickets.length === 0) {
-          callback([
-            {
-              id: 't_1',
-              orderId: 'ord_1',
-              orderNumber: 'ORD-10024',
-              tableNumber: 'Table 4',
-              type: 'DINE_IN',
-              status: 'NEW',
-              items: [
-                { id: 'ti_1', productId: 'prod_chow_chicken', productName: 'Chicken Chowmein • Medium', size: 'Medium', quantity: 2, status: 'PENDING', stationId: 'st_1', modifiers: [], notes: 'Extra spicy' },
-                { id: 'ti_2', productId: 'prod_fr_chicken', productName: 'Chicken Fried Rice • Small', size: 'Small', quantity: 1, status: 'PENDING', stationId: 'st_1', modifiers: [] }
-              ],
-              createdAt: new Date(Date.now() - 5 * 60000).toISOString(),
-              targetTime: new Date(Date.now() + 15 * 60000).toISOString(),
-              priority: 'NORMAL'
-            }
-          ]);
-        } else {
-          callback(tickets);
-        }
+        callback(tickets);
       }, (error) => {
         onError(error);
       });
@@ -157,7 +137,8 @@ class KdsService {
     };
     if (db) {
       try {
-        await setDoc(doc(db, 'tickets', newTicket.id), newTicket);
+        await setDoc(doc(db, 'tickets', newTicket.id), JSON.parse(JSON.stringify(newTicket)));
+
       } catch (err) {
         console.warn("Could not save ticket to Firestore:", err);
       }

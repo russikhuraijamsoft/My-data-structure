@@ -103,9 +103,9 @@ class AuthService {
       email: user.email,
       phoneNumber: user.phoneNumber,
       displayName,
-      roles: ['OWNER', 'ADMIN'],
-      permissions: ['*'],
-      branches: ['Downtown Main'],
+      roles: [],
+      permissions: [],
+      branches: [],
       createdAt: new Date().toISOString()
     };
 
