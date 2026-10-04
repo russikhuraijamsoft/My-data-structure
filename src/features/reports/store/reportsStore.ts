@@ -1,37 +1,22 @@
 import { create } from 'zustand';
-import { SalesReport, ExpenseReport, DashboardMetrics, TimeFilter } from '../models/reports';
 import { reportsService } from '../services/reportsService';
+import type { summarizeSales } from '../utils/sales';
 
 interface ReportsState {
-  metrics: DashboardMetrics | null;
-  salesTrend: SalesReport[];
-  expenseBreakdown: ExpenseReport[];
+  sales: ReturnType<typeof summarizeSales> | null;
   loading: boolean;
   error: string | null;
-  timeFilter: TimeFilter;
-  setTimeFilter: (filter: TimeFilter) => void;
   loadReports: () => Promise<void>;
 }
-
 export const useReportsStore = create<ReportsState>((set) => ({
-  metrics: null,
-  salesTrend: [],
-  expenseBreakdown: [],
-  loading: false,
-  error: null,
-  timeFilter: 'MONTH',
-  setTimeFilter: (filter) => set({ timeFilter: filter }),
+  sales: null, loading: false, error: null,
   loadReports: async () => {
     set({ loading: true, error: null });
     try {
-      const [metrics, salesTrend, expenseBreakdown] = await Promise.all([
-        reportsService.getDashboardMetrics(),
-        reportsService.getSalesTrend(),
-        reportsService.getExpenseBreakdown()
-      ]);
-      set({ metrics, salesTrend, expenseBreakdown, loading: false });
-    } catch (e: any) {
-      set({ error: e.message, loading: false });
+      const sales = await reportsService.loadSales();
+      set({ sales, loading: false });
+    } catch (error) {
+      set({ sales: null, loading: false, error: error instanceof Error ? error.message : 'Could not load saved orders.' });
     }
-  }
+  },
 }));

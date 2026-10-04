@@ -5,7 +5,7 @@ import { LayoutDashboard, FileBarChart, PieChart, ShoppingBag, Users, Wallet } f
 
 export function ReportsPage() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'sales' | 'inventory' | 'kitchen' | 'crm' | 'finance'>('dashboard');
-  const { loadReports, loading } = useReportsStore();
+  const { loadReports, loading, error } = useReportsStore();
 
   useEffect(() => {
     loadReports();
@@ -53,21 +53,22 @@ export function ReportsPage() {
         </nav>
       </div>
 
-      {loading && activeTab === 'dashboard' ? (
+      {error && <p role="alert">Could not load reports: {error} <button className="underline" onClick={() => void loadReports()}>Retry</button></p>}
+      {loading ? (
         <div className="flex items-center justify-center h-64 text-[#800000]">
           <div className="w-8 h-8 border-4 border-[#800000] border-t-transparent rounded-full animate-spin"></div>
         </div>
       ) : (
         <div className="py-2">
-          {activeTab === 'dashboard' && <ReportsDashboard />}
-          {activeTab !== 'dashboard' && (
+          {(activeTab === 'dashboard' || activeTab === 'sales') && <ReportsDashboard />}
+          {activeTab !== 'dashboard' && activeTab !== 'sales' && (
             <div className="flex flex-col items-center justify-center p-12 text-center border-2 border-dashed border-[#ebd5da] rounded-2xl bg-[#fdf5f6]/50">
               <FileBarChart className="w-12 h-12 text-[#dcabb5] mb-3" />
               <h3 className="text-base font-bold text-[#800000] mb-1">
                 {tabs.find(t => t.id === activeTab)?.label}
               </h3>
               <p className="text-xs text-[#800000]/70 max-w-md">
-                Detailed reporting and drill-down metrics for this operational sector.
+                This report is not connected yet.
               </p>
             </div>
           )}

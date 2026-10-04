@@ -78,7 +78,7 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
 export const router = createBrowserRouter([
   {
     path: '/kiosk',
-    element: <KioskPage />,
+    element: <main className="min-h-screen flex flex-col items-center justify-center gap-4 p-6 text-center"><h1 className="text-2xl font-bold">Kiosk ordering is being prepared</h1><p>Please place your order at the staffed counter. Online payments are not connected yet.</p><a href="/pos" className="underline">Open staffed counter</a></main>,
   },
   {
     path: '/auth',
@@ -109,7 +109,7 @@ export const router = createBrowserRouter([
       },
       {
         path: 'kiosk',
-        element: <KioskPage />,
+        element: <main className="min-h-screen flex flex-col items-center justify-center gap-4 p-6 text-center"><h1 className="text-2xl font-bold">Kiosk ordering is being prepared</h1><p>Please place your order at the staffed counter. Online payments are not connected yet.</p><a href="/pos" className="underline">Open staffed counter</a></main>,
       },
       {
         path: 'kds',

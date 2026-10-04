@@ -57,14 +57,14 @@ service cloud.firestore {
     }
 
     match /orders/{orderId} {
-      allow read: if canUsePos();
+      allow read: if canUsePos() || hasRole('ACCOUNTANT');
       allow create: if canUsePos();
       allow update: if canUsePos();
       allow delete: if isAdmin();
     }
 
     match /pos_orders/{orderId} {
-      allow read: if canUsePos();
+      allow read: if canUsePos() || hasRole('ACCOUNTANT');
       allow create: if canUsePos();
       allow update: if canUsePos();
       allow delete: if isAdmin();

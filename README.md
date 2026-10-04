@@ -36,10 +36,10 @@ Review and deploy `firestore.rules` to the configured Firestore database before 
 The application is still under development. Passing the build and unit tests does not make every module production-ready.
 
 - Orders now fail visibly when Firestore rejects a save; the POS cart remains available. Durable offline order synchronization is not implemented.
-- Order, kitchen ticket, and inventory writes still need a shared atomic/idempotent workflow before live service. A partial failure can leave the systems inconsistent.
-- The public kiosk has simulated payments and needs a secure backend order/payment flow.
+- POS bills and kitchen tickets now save in one atomic batch. Concurrent checkout clicks are blocked. Inventory deductions remain separate and need a reconciled/idempotent workflow before live service. Refresh/retry recovery also needs a durable checkout identifier.
+- Public kiosk ordering is disabled until a secure backend order/payment flow is configured; simulation methods cannot write paid orders.
 - PIN/biometric login is not implemented.
-- Several dashboards and business services still use sample data. They must be connected to verified restaurant records before operational use.
+- The home dashboard and sales reports now use saved paid orders with India calendar dates. They show zero for an empty database and errors when reads fail. Profit/expense data is not fabricated. Other business modules still need sample data removed before operational use.
 - AI chat no longer fabricates fallback statistics. Live reporting data is not connected to chat. Before setting a production Gemini key, add server-side authentication, authorization, and rate limiting to the AI endpoint.
 - Role restrictions are a first pass, not complete multi-tenant/branch isolation. Review role access and test the rules before deployment.
 - Finance, payroll, purchasing, refunds, inventory reversal, and backups require end-to-end validation.
@@ -47,3 +47,15 @@ The application is still under development. Passing the build and unit tests doe
 ## Verification
 
 `npm run lint`, `npm test`, and `npm run build` validate types, unit tests, and production compilation. Tests cover failed POS writes, retention of the cart after failure, optional-field serialization, and preventing menu overwrites during reads.
+
+## Counter and kitchen test flow
+
+After configuring Firebase and assigning an owner role:
+
+1. Open the counter, choose menu items, and select the order type/table.
+2. Enter actual cash received. Check the bill and change before recording payment.
+3. Confirm the receipt and corresponding kitchen ticket. Both are committed together.
+4. In the kitchen, accept the ticket, start preparation, mark ready, and mark served.
+5. Refresh Sales Reports to verify the paid bill. Failed writes must retain the cart and show an error.
+
+The counter currently preserves the previous 5% tax configuration, with each component rounded to paise. Confirm your applicable tax treatment and menu prices before launch. Card/UPI collection is not integrated. Sales are restaurant-wide; branch-specific isolation is still pending.

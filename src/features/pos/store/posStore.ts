@@ -13,7 +13,7 @@ import {
 import { posService } from '../services/posService';
 import { inventoryService } from '../../inventory/services/inventoryService';
 import { manufacturingService } from '../../manufacturing/services/manufacturingService';
-import { kdsService } from '../../kds/services/kdsService';
+import { calculateTotals } from '../utils/totals';
 
 interface PosState {
   products: Product[];
@@ -100,6 +100,7 @@ export const usePosStore = create<PosState>((set, get) => ({
   },
 
   addToCart: (product, sizeOrQuantity, selectedOption, quantityParam, notesParam) => {
+    if (get().loading) return;
     const { cart } = get();
     let chosenSize: ItemSize = 'Standard';
     let qty = 1;
@@ -167,6 +168,7 @@ export const usePosStore = create<PosState>((set, get) => ({
   },
 
   updateQuantity: (cartItemIdOrProductId, newQuantity) => {
+    if (get().loading) return;
     const { cart } = get();
     if (newQuantity <= 0) {
       get().removeFromCart(cartItemIdOrProductId);
@@ -193,6 +195,7 @@ export const usePosStore = create<PosState>((set, get) => ({
   },
 
   removeFromCart: (cartItemIdOrProductId) => {
+    if (get().loading) return;
     set({
       cart: get().cart.filter(item => 
         item.cartItemId !== cartItemIdOrProductId &&
@@ -203,6 +206,7 @@ export const usePosStore = create<PosState>((set, get) => ({
   },
 
   clearCart: () => {
+    if (get().loading) return;
     set({ 
       cart: [],
       discount: null,
@@ -270,30 +274,17 @@ export const usePosStore = create<PosState>((set, get) => ({
 
   completeCheckout: async ({ method, details }) => {
     const { cart, orderType, tableNumber, customerName, customerPhone, orderNotes, discount } = get();
+    if (get().loading) throw new Error('A checkout is already in progress.');
     if (cart.length === 0) throw new Error("Cannot checkout empty cart");
 
     set({ loading: true, error: null });
     try {
-      const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+      if (orderType === 'DINE_IN' && !tableNumber.trim()) throw new Error('Enter the table for this order.');
+      const { subtotal, discountAmount, cgst, sgst, tax, total } = calculateTotals(cart, discount);
       const totalCost = cart.reduce((sum, item) => sum + ((item.unitCost || 0) * item.quantity), 0);
-      
-      let discountAmount = 0;
-      if (discount) {
-        if (discount.type === 'PERCENTAGE') {
-          discountAmount = (subtotal * discount.value) / 100;
-        } else {
-          discountAmount = Math.min(subtotal, discount.value);
-        }
+      if (method === 'CASH' && (!Number.isFinite(details.cashTendered) || details.cashTendered! < total)) {
+        throw new Error('Cash received must cover the bill total.');
       }
-
-      const discountedSubtotal = Math.max(0, subtotal - discountAmount);
-      
-      // 5% GST
-      const cgst = discountedSubtotal * 0.025;
-      const sgst = discountedSubtotal * 0.025;
-      const tax = cgst + sgst;
-      const total = Math.round((discountedSubtotal + tax) * 100) / 100;
-
       const order = await posService.createOrder({
         items: cart,
         orderType,
@@ -378,38 +369,6 @@ export const usePosStore = create<PosState>((set, get) => ({
         }
       }
 
-      // 2. Push to KDS Ticket
-      try {
-        await kdsService.createTicket({
-          orderId: order.id,
-          orderNumber: order.orderNumber,
-          type: orderType,
-          tableNumber: orderType === 'DINE_IN' ? tableNumber : undefined,
-          customerName: customerName.trim() || undefined,
-          status: 'NEW',
-          priority: 'NORMAL',
-          targetTime: new Date(Date.now() + 20 * 60000).toISOString(),
-          items: cart.map((item, idx) => ({
-            id: `ti_${order.id}_${idx}`,
-            productId: item.productId,
-            productName: item.selectedOption 
-              ? `${item.name} (${item.selectedOption})`
-              : (item.size && item.size !== 'Standard' ? `${item.name} • ${item.size}` : item.name),
-            size: item.size,
-            quantity: item.quantity,
-            modifiers: [
-              ...(item.selectedOption ? [item.selectedOption] : []),
-              ...(item.notes ? [`Note: ${item.notes}`] : [])
-            ],
-            notes: item.notes || orderNotes || undefined,
-            stationId: 'st_1',
-            status: 'PENDING'
-          }))
-        });
-      } catch (kdsErr) {
-        console.warn('Could not push order to KDS:', kdsErr);
-      }
-
       const updatedHistory = [order, ...get().ordersHistory];
       set({ 
         cart: [], 
@@ -431,9 +390,7 @@ export const usePosStore = create<PosState>((set, get) => ({
   checkout: async () => {
     const { cart } = get();
     if (cart.length === 0) return;
-    const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-    const tax = subtotal * 0.05;
-    const total = subtotal + tax;
+    const { total } = calculateTotals(cart, get().discount);
 
     return get().completeCheckout({
       method: 'CASH',

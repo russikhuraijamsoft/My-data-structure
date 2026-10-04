@@ -6,7 +6,7 @@ import { ChefHat, Clock, CheckSquare, BarChart3, ListOrdered } from 'lucide-reac
 import { differenceInMinutes } from 'date-fns';
 
 export function KdsLayout() {
-  const { stations, activeStationId, setActiveStation, loadStations, subscribeToTickets, tickets } = useKdsStore();
+  const { stations, activeStationId, setActiveStation, loadStations, subscribeToTickets, tickets, error } = useKdsStore();
   const [activeTab, setActiveTab] = useState<'queue' | 'analytics'>('queue');
 
   useEffect(() => {
@@ -113,8 +113,9 @@ export function KdsLayout() {
         </div>
       </div>
 
+      {error && <p role="alert" className="p-4 bg-red-50 text-red-800">{error}</p>}
       {/* Main Area */}
-      {activeTab === 'queue' ? <TicketBoard /> : <KdsAnalytics />}
+      {activeTab === 'queue' ? <TicketBoard /> : <p className="p-6">Historical kitchen analytics are not connected yet.</p>}
     </div>
   );
 }

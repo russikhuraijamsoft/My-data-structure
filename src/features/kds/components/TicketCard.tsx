@@ -49,6 +49,7 @@ export function TicketCard({ ticket, activeStationId }: TicketCardProps) {
     if (ticket.status === 'NEW') updateTicketStatus(ticket.id, 'ACCEPTED');
     else if (ticket.status === 'ACCEPTED') updateTicketStatus(ticket.id, 'PREPARING');
     else if (ticket.status === 'PREPARING') updateTicketStatus(ticket.id, 'READY');
+    else if (ticket.status === 'READY') updateTicketStatus(ticket.id, 'SERVED');
   };
 
   return (
@@ -75,12 +76,12 @@ export function TicketCard({ ticket, activeStationId }: TicketCardProps) {
         <span className="text-xs font-black px-2.5 py-1 rounded-md bg-white border border-[#ebd5da] text-[#800000]">
           {ticket.status}
         </span>
-        {ticket.status !== 'READY' && (
+        {['NEW', 'ACCEPTED', 'PREPARING', 'READY'].includes(ticket.status) && (
           <button 
             onClick={handleNextTicketState}
             className="text-xs font-black px-3.5 py-1.5 rounded-lg bg-[#800000] text-white hover:bg-[#680016] transition-colors cursor-pointer"
           >
-            {ticket.status === 'NEW' ? 'ACCEPT' : ticket.status === 'ACCEPTED' ? 'START PREP' : 'MARK READY'}
+            {ticket.status === 'NEW' ? 'ACCEPT' : ticket.status === 'ACCEPTED' ? 'START PREP' : ticket.status === 'READY' ? 'MARK SERVED' : 'MARK READY'}
           </button>
         )}
       </div>

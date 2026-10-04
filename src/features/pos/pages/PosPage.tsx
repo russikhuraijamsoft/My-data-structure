@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { usePosStore } from '../store/posStore';
+import { calculateTotals } from '../utils/totals';
 import { Product, ItemSize } from '../models/pos';
 import { Loader2, Plus, Minus, Trash2, ShoppingCart, Sparkles, UtensilsCrossed, Monitor } from 'lucide-react';
 import { SizeSelectorModal } from '../components/SizeSelectorModal';
@@ -17,10 +18,11 @@ export function PosPage() {
     addToCart, 
     updateQuantity,
     removeFromCart, 
-    checkout,
+    completeCheckout, orderType, setOrderType, tableNumber, setTableNumber,
     clearCompletedOrder
   } = usePosStore();
 
+  const [cashReceived, setCashReceived] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [modalProduct, setModalProduct] = useState<Product | null>(null);
 
@@ -63,9 +65,7 @@ export function PosPage() {
     setModalProduct(null);
   };
 
-  const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-  const tax = subtotal * 0.05;
-  const total = subtotal + tax;
+  const { subtotal, tax, total } = calculateTotals(cart, usePosStore.getState().discount);
 
   return (
     <div className="flex h-[calc(100vh-4rem)] bg-white text-[#800000]">
@@ -368,13 +368,25 @@ export function PosPage() {
             </div>
           </div>
 
+          <div className="mb-3 space-y-2">
+            <label className="block text-sm">Order type
+              <select aria-label="Order type" disabled={loading} value={orderType} onChange={e => setOrderType(e.target.value as typeof orderType)} className="ml-2 border rounded p-1">
+                <option value="DINE_IN">Dine in</option><option value="TAKEAWAY">Takeaway</option><option value="DELIVERY">Delivery</option>
+              </select>
+            </label>
+            {orderType === 'DINE_IN' && <label className="block text-sm">Table <input aria-label="Table" disabled={loading} value={tableNumber} onChange={e => setTableNumber(e.target.value)} className="border rounded p-1" /></label>}
+            <label className="block text-sm">Cash received (₹)
+              <input aria-label="Cash received" type="number" min={0} step="0.01" disabled={loading} value={cashReceived} onChange={e => setCashReceived(e.target.value)} className="w-full border rounded p-2" />
+            </label>
+            <p className="text-sm">Change: ₹{Math.max(0, Number(cashReceived || 0) - total).toFixed(2)}</p>
+          </div>
           <button 
-            onClick={() => checkout()}
-            disabled={cart.length === 0 || loading}
+            onClick={() => void completeCheckout({ method: 'CASH', details: { method: 'CASH', cashTendered: Number(cashReceived), changeDue: Math.max(0, Number(cashReceived) - total) } }).then(() => setCashReceived('')).catch(() => {})}
+            disabled={cart.length === 0 || loading || !cashReceived || Number(cashReceived) < total}
             className="w-full bg-[#800000] hover:bg-[#680016] text-white font-black py-3.5 rounded-xl flex items-center justify-center disabled:opacity-50 transition-colors shadow-xs cursor-pointer text-base"
           >
             {loading ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : null}
-            Charge ₹{total.toFixed(2)}
+            Record cash payment ₹{total.toFixed(2)}
           </button>
         </div>
       </div>

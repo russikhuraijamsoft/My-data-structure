@@ -1,5 +1,6 @@
-import { collection, query, getDocs, doc, setDoc, updateDoc } from 'firebase/firestore';
+import { collection, query, getDocs, doc, setDoc, updateDoc, writeBatch, runTransaction } from 'firebase/firestore';
 import { db } from '../../../core/firebase/firebaseConfig';
+import type { Ticket } from '../../kds/models/kds';
 import { Product, Order, MenuItemSize } from '../models/pos';
 import { INITIAL_MENU_ITEMS, getAllMenuItemSizes } from '../data/menuData';
 
@@ -93,10 +94,14 @@ class PosService {
 
   async updateOrderStatus(orderId: string, status: Order['status'], voidReason?: string): Promise<void> {
     if (!db) throw new Error('Order storage is unavailable.');
-    await updateDoc(doc(db, 'pos_orders', orderId), {
-      status,
-      ...(voidReason ? { voidReason } : {}),
-      updatedAt: new Date().toISOString()
+    await runTransaction(db, async transaction => {
+      const orderRef = doc(db, 'pos_orders', orderId);
+      const ticketRef = doc(db, 'tickets', `ticket_${orderId}`);
+      const ticket = await transaction.get(ticketRef);
+      transaction.update(orderRef, { status, ...(voidReason ? { voidReason } : {}), updatedAt: new Date().toISOString() });
+      if (ticket.exists() && (status === 'CANCELLED' || status === 'REFUNDED')) {
+        transaction.update(ticketRef, { status: 'CANCELLED' });
+      }
     });
     this.localOrders = this.localOrders.map(order => order.id === orderId
       ? { ...order, status, ...(voidReason ? { voidReason } : {}) } : order);
@@ -111,7 +116,33 @@ class PosService {
       createdAt: new Date().toISOString()
     };
     // JSON removes optional undefined fields that Firestore rejects, including nested items.
-    await setDoc(doc(db, 'pos_orders', newOrder.id), JSON.parse(JSON.stringify(newOrder)));
+    const ticket: Ticket = {
+      id: `ticket_${newOrder.id}`,
+      orderId: newOrder.id,
+      orderNumber: newOrder.orderNumber,
+      type: newOrder.orderType || 'DINE_IN',
+      tableNumber: newOrder.tableNumber,
+      customerName: newOrder.customerName,
+      status: 'NEW',
+      priority: 'NORMAL',
+      createdAt: newOrder.createdAt,
+      targetTime: new Date(Date.now() + 20 * 60000).toISOString(),
+      items: newOrder.items.map((item, index) => ({
+        id: `${newOrder.id}_${index}`,
+        productId: item.productId,
+        productName: item.name,
+        size: item.size,
+        quantity: item.quantity,
+        modifiers: item.selectedOption ? [item.selectedOption] : [],
+        notes: item.notes || newOrder.orderNotes,
+        stationId: 'st_1',
+        status: 'PENDING'
+      }))
+    };
+    const batch = writeBatch(db);
+    batch.set(doc(db, 'pos_orders', newOrder.id), JSON.parse(JSON.stringify(newOrder)));
+    batch.set(doc(db, 'tickets', ticket.id), JSON.parse(JSON.stringify(ticket)));
+    await batch.commit();
     this.localOrders.unshift(newOrder);
     return newOrder;
   }
