@@ -24,6 +24,7 @@ export function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
       )}
 
       <aside
+        id="sidebar"
         aria-label="Main navigation"
         className={`
           fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-[#ebd5da] bg-white
