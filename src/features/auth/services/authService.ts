@@ -2,6 +2,7 @@ import {
   createUserWithEmailAndPassword, 
   signInWithEmailAndPassword,
   signInWithPopup,
+  signInWithRedirect,
   GoogleAuthProvider,
   OAuthProvider,
   sendPasswordResetEmail,
@@ -49,7 +50,15 @@ class AuthService {
   async loginWithGoogle(): Promise<User> {
     if (!auth) throw new Error('Firebase not initialized');
     const provider = new GoogleAuthProvider();
-    const userCredential = await signInWithPopup(auth, provider);
+    
+    // Use redirect on mobile/Capacitor, popup on web
+    const isMobile = typeof window !== 'undefined' && (window as any).Capacitor;
+    let userCredential;
+    if (isMobile) {
+      userCredential = await signInWithRedirect(auth, provider);
+    } else {
+      userCredential = await signInWithPopup(auth, provider);
+    }
     
     // Check if profile exists, if not create one
     const profile = await this.getUserProfile(userCredential.user.uid);
