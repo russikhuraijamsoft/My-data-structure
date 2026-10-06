@@ -1,5 +1,22 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import type { StateStorage } from 'zustand/middleware';
+
+const memory = new Map<string, string>();
+const fallbackStorage: StateStorage = {
+  getItem: (name) => memory.get(name) ?? null,
+  setItem: (name, value) => { memory.set(name, value); },
+  removeItem: (name) => { memory.delete(name); },
+};
+
+function getAppStorage(): StateStorage {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) return window.localStorage;
+  } catch {
+    // Storage can be unavailable in restricted browser contexts or server-side tests.
+  }
+  return fallbackStorage;
+}
 
 interface AppState {
   theme: 'light' | 'dark' | 'system';
@@ -22,7 +39,7 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: 'talkos-app-storage',
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => getAppStorage()),
     }
   )
 );

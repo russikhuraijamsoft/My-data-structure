@@ -7,13 +7,15 @@ import {
   OrderType, 
   PaymentMethod, 
   PaymentDetails, 
-  DiscountType, 
-  ParkedOrder 
+  DiscountType,
+  ParkedOrder,
+  InventorySyncStatus,
 } from '../models/pos';
 import { posService } from '../services/posService';
 import { inventoryService } from '../../inventory/services/inventoryService';
 import { manufacturingService } from '../../manufacturing/services/manufacturingService';
 import { calculateTotals } from '../utils/totals';
+import { buildInventoryPlan } from '../utils/inventoryPlan';
 
 interface PosState {
   products: Product[];
@@ -31,6 +33,8 @@ interface PosState {
 
   parkedOrders: ParkedOrder[];
   ordersHistory: Order[];
+  inventoryAttentionOrders: Order[];
+  inventoryAttentionError: string | null;
   ordersLoading: boolean;
 
   loadProducts: () => Promise<void>;
@@ -58,11 +62,26 @@ interface PosState {
   deleteParkedOrder: (parkedOrderId: string) => void;
   
   completeCheckout: (payment: { method: PaymentMethod; details: PaymentDetails }) => Promise<Order>;
+  retryInventorySync: (order: Order) => Promise<Order>;
   checkout: () => Promise<Order | void>;
   clearCompletedOrder: () => void;
   
   loadOrdersHistory: () => Promise<void>;
+  loadInventoryAttentionOrders: () => Promise<void>;
   cancelOrder: (orderId: string, reason: string) => Promise<void>;
+}
+
+async function applyInventoryPlan(plan: NonNullable<Order['inventoryPlan']>): Promise<string[]> {
+  const errors: string[] = [];
+  for (const movement of plan) {
+    const { idempotencyKey, ...transactionData } = movement;
+    try {
+      await inventoryService.recordTransaction({ ...transactionData, type: 'STOCK_OUT' }, idempotencyKey);
+    } catch (error) {
+      errors.push(error instanceof Error ? error.message : String(error));
+    }
+  }
+  return errors;
 }
 
 export const usePosStore = create<PosState>((set, get) => ({
@@ -79,6 +98,8 @@ export const usePosStore = create<PosState>((set, get) => ({
   discount: null,
   parkedOrders: [],
   ordersHistory: [],
+  inventoryAttentionOrders: [],
+  inventoryAttentionError: null,
   ordersLoading: false,
 
   setOrderType: (orderType) => set({ orderType }),
@@ -160,6 +181,8 @@ export const usePosStore = create<PosState>((set, get) => ({
         notes: notesParam,
         unitCost: itemCost,
         recipeId: product.recipeId,
+        inventoryItemId: product.inventoryItemId,
+        sizeRecipeIds: product.sizeRecipeIds,
         isCombo: product.isCombo,
         comboComponents: product.comboComponents
       };
@@ -273,7 +296,7 @@ export const usePosStore = create<PosState>((set, get) => ({
   },
 
   completeCheckout: async ({ method, details }) => {
-    const { cart, orderType, tableNumber, customerName, customerPhone, orderNotes, discount } = get();
+    const { cart, products, orderType, tableNumber, customerName, customerPhone, orderNotes, discount } = get();
     if (get().loading) throw new Error('A checkout is already in progress.');
     if (cart.length === 0) throw new Error("Cannot checkout empty cart");
 
@@ -285,7 +308,22 @@ export const usePosStore = create<PosState>((set, get) => ({
       if (method === 'CASH' && (!Number.isFinite(details.cashTendered) || details.cashTendered! < total)) {
         throw new Error('Cash received must cover the bill total.');
       }
-      const order = await posService.createOrder({
+
+      const orderId = `ord_${crypto.randomUUID()}`;
+      let recipes: Awaited<ReturnType<typeof manufacturingService.getRecipes>> = [];
+      let recipeLoadError = '';
+      try {
+        recipes = await manufacturingService.getRecipes();
+      } catch (error) {
+        recipeLoadError = error instanceof Error ? error.message : 'Could not load recipes.';
+      }
+      const builtPlan = buildInventoryPlan(orderId, cart, products, recipes);
+      const unresolved = [...builtPlan.unresolved];
+      if (recipeLoadError) unresolved.push(`Recipe data unavailable: ${recipeLoadError}`);
+      const inventoryReady = unresolved.length === 0 && builtPlan.plan.length > 0;
+      const inventorySyncStatus: InventorySyncStatus = inventoryReady ? 'PENDING' : 'NOT_CONFIGURED';
+      const inventorySyncError = inventoryReady ? '' : (unresolved.join(' ') || 'No inventory recipe or stock-item mapping is configured.');
+      let order = await posService.createOrder({
         items: cart,
         orderType,
         tableNumber: orderType === 'DINE_IN' ? tableNumber : undefined,
@@ -305,86 +343,75 @@ export const usePosStore = create<PosState>((set, get) => ({
         paymentMethod: method,
         paymentDetails: details,
         cashierName: 'Talk of the Town Counter',
-        status: 'PAID'
-      });
+        status: 'PAID',
+        inventorySyncStatus,
+        inventorySyncError,
+        inventoryPlan: inventoryReady ? builtPlan.plan : [],
+      }, orderId);
 
-      // 1. Inventory Deduction
-      for (const item of cart) {
-        if (item.recipeId) {
-          try {
-            const recipes = await manufacturingService.getRecipes();
-            const recipe = recipes.find(r => r.id === item.recipeId);
-            if (recipe) {
-              const baseYield = recipe.yieldQuantity || 1;
-              const ratio = item.quantity / baseYield;
-              
-              for (const ing of recipe.ingredients) {
-                if (ing.inventoryItemId) {
-                  const qtyToDeduct = ing.quantity * ratio;
-                  await inventoryService.recordTransaction({
-                    itemId: ing.inventoryItemId,
-                    type: 'STOCK_OUT',
-                    quantity: qtyToDeduct,
-                    referenceId: order.id,
-                    notes: `POS Sale (${order.orderNumber}): ${item.name}${item.size && item.size !== 'Standard' ? ` • ${item.size}` : ''}`,
-                    unitCost: ing.costPerUnit || 0,
-                    totalCost: (ing.costPerUnit || 0) * qtyToDeduct,
-                    performedBy: 'System'
-                  }).catch(e => console.error('Error recording POS inventory deduction', e));
-                }
-              }
-            }
-          } catch (recipeError) {
-             console.error('Error fetching recipe for POS deduction', recipeError);
-          }
+      if (inventoryReady) {
+        const movementErrors = await applyInventoryPlan(builtPlan.plan);
+        let finalStatus: InventorySyncStatus = movementErrors.length ? 'PENDING' : 'SYNCED';
+        let finalError = movementErrors.join(' ');
+        try {
+          await posService.updateInventorySyncStatus(order.id, finalStatus, finalError);
+        } catch (error) {
+          finalStatus = 'PENDING';
+          finalError = [finalError, error instanceof Error ? error.message : String(error)].filter(Boolean).join(' ');
         }
-
-        if (item.isCombo && item.comboComponents) {
-          for (const comp of item.comboComponents) {
-            let componentNameToDeduct = comp.name;
-            let componentItemId = comp.itemId;
-            if (comp.isChoice && item.selectedOption && comp.options) {
-              const selectedOpt = comp.options.find(o => o.name === item.selectedOption);
-              if (selectedOpt) {
-                componentNameToDeduct = selectedOpt.name;
-                componentItemId = selectedOpt.itemId;
-              }
-            }
-            try {
-              const componentQty = (comp.quantity || 1) * item.quantity;
-              await inventoryService.recordTransaction({
-                itemId: componentItemId,
-                type: 'STOCK_OUT',
-                quantity: componentQty,
-                referenceId: order.id,
-                notes: `POS Combo Sale (${order.orderNumber}): ${item.name} -> Component: ${componentNameToDeduct}`,
-                unitCost: item.unitCost ? item.unitCost / 2 : 0,
-                totalCost: 0,
-                performedBy: 'System'
-              }).catch(e => console.error('Error deducting combo component stock:', e));
-            } catch (err) {
-              console.warn('Combo inventory deduction notice:', err);
-            }
-          }
-        }
+        order = { ...order, inventorySyncStatus: finalStatus, inventorySyncError: finalError };
       }
 
       const updatedHistory = [order, ...get().ordersHistory];
-      set({ 
-        cart: [], 
+      set({
+        cart: [],
         orderNotes: '',
         customerName: '',
         customerPhone: '',
         discount: null,
-        loading: false, 
+        loading: false,
+        error: order.inventorySyncStatus === 'SYNCED' ? null : order.inventorySyncError || 'Inventory needs attention.',
         lastCompletedOrder: order,
-        ordersHistory: updatedHistory
+        ordersHistory: updatedHistory,
+        inventoryAttentionOrders: order.inventorySyncStatus === 'SYNCED'
+          ? get().inventoryAttentionOrders.filter(existing => existing.id !== order.id)
+          : [order, ...get().inventoryAttentionOrders.filter(existing => existing.id !== order.id)],
       });
       return order;
-    } catch (err: any) {
-      set({ error: err.message, loading: false });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      set({ error: message, loading: false });
       throw err;
     }
+  },
+
+  retryInventorySync: async (order) => {
+    if (get().loading) throw new Error('Another operation is already in progress.');
+    if (order.inventorySyncStatus !== 'PENDING' || !order.inventoryPlan?.length) {
+      throw new Error('This order has no retryable inventory plan.');
+    }
+    set({ loading: true, error: null });
+    const movementErrors = await applyInventoryPlan(order.inventoryPlan);
+    let status: InventorySyncStatus = movementErrors.length ? 'PENDING' : 'SYNCED';
+    let message = movementErrors.join(' ');
+    try {
+      await posService.updateInventorySyncStatus(order.id, status, message);
+    } catch (error) {
+      status = 'PENDING';
+      message = [message, error instanceof Error ? error.message : String(error)].filter(Boolean).join(' ');
+    }
+    const updatedOrder = { ...order, inventorySyncStatus: status, inventorySyncError: message };
+    set({
+      loading: false,
+      error: status === 'SYNCED' ? null : message || 'Inventory sync is still pending.',
+      lastCompletedOrder: get().lastCompletedOrder?.id === order.id ? updatedOrder : get().lastCompletedOrder,
+      ordersHistory: get().ordersHistory.map(existing => existing.id === order.id ? updatedOrder : existing),
+      inventoryAttentionOrders: status === 'SYNCED'
+        ? get().inventoryAttentionOrders.filter(existing => existing.id !== order.id)
+        : [updatedOrder, ...get().inventoryAttentionOrders.filter(existing => existing.id !== order.id)],
+    });
+    if (status !== 'SYNCED') throw new Error(message || 'Inventory sync is still pending.');
+    return updatedOrder;
   },
 
   checkout: async () => {
@@ -409,6 +436,15 @@ export const usePosStore = create<PosState>((set, get) => ({
       set({ ordersHistory: orders, ordersLoading: false });
     } catch (err: any) {
       set({ ordersLoading: false, error: err.message });
+    }
+  },
+
+  loadInventoryAttentionOrders: async () => {
+    try {
+      const inventoryAttentionOrders = await posService.getInventoryAttentionOrders();
+      set({ inventoryAttentionOrders, inventoryAttentionError: null });
+    } catch (error) {
+      set({ inventoryAttentionError: error instanceof Error ? error.message : String(error) });
     }
   },
 

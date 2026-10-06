@@ -107,11 +107,33 @@ class PosService {
       ? { ...order, status, ...(voidReason ? { voidReason } : {}) } : order);
   }
 
-  async createOrder(orderData: Omit<Order, 'id' | 'createdAt' | 'orderNumber'>): Promise<Order> {
+  async getInventoryAttentionOrders(): Promise<Order[]> {
+    if (!db) throw new Error('Order storage is unavailable.');
+    const snapshot = await getDocs(query(collection(db, 'pos_orders')));
+    return snapshot.docs
+      .map(orderDoc => ({ id: orderDoc.id, ...orderDoc.data() } as Order))
+      .filter(order => order.inventorySyncStatus === 'PENDING' || order.inventorySyncStatus === 'NOT_CONFIGURED')
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  async updateInventorySyncStatus(orderId: string, status: Order['inventorySyncStatus'], error?: string): Promise<void> {
+    if (!db) throw new Error('Order storage is unavailable; inventory sync status could not be saved.');
+    const update = {
+      inventorySyncStatus: status,
+      inventorySyncError: error || '',
+    };
+    await updateDoc(doc(db, 'pos_orders', orderId), update);
+    this.localOrders = this.localOrders.map(order => order.id === orderId ? { ...order, ...update } : order);
+  }
+
+  async createOrder(
+    orderData: Omit<Order, 'id' | 'createdAt' | 'orderNumber'>,
+    orderId: string = `ord_${crypto.randomUUID()}`,
+  ): Promise<Order> {
     if (!db) throw new Error('Order storage is unavailable. Your cart has been kept.');
     const newOrder: Order = {
       ...orderData,
-      id: `ord_${crypto.randomUUID()}`,
+      id: orderId,
       orderNumber: `ORD-${Math.floor(10000 + Math.random() * 90000)}`,
       createdAt: new Date().toISOString()
     };

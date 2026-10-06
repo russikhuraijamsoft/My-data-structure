@@ -14,11 +14,14 @@ export function PosPage() {
     loading, 
     error, 
     lastCompletedOrder,
+    inventoryAttentionOrders,
+    inventoryAttentionError,
+    loadInventoryAttentionOrders,
     loadProducts, 
     addToCart, 
     updateQuantity,
     removeFromCart, 
-    completeCheckout, orderType, setOrderType, tableNumber, setTableNumber,
+    completeCheckout, retryInventorySync, orderType, setOrderType, tableNumber, setTableNumber,
     clearCompletedOrder
   } = usePosStore();
 
@@ -28,7 +31,8 @@ export function PosPage() {
 
   useEffect(() => {
     loadProducts();
-  }, [loadProducts]);
+    void loadInventoryAttentionOrders();
+  }, [loadProducts, loadInventoryAttentionOrders]);
 
   const activeProducts = products.filter(
     p => p.active !== false && p.isAvailable !== false && !p.isSubItem
@@ -123,6 +127,33 @@ export function PosPage() {
           <div className="mb-4 text-[#800000] bg-[#fee8eb] border border-[#ebd5da] p-3 rounded-lg font-bold text-sm">
             {error}
           </div>
+        )}
+
+        {(inventoryAttentionOrders.length > 0 || inventoryAttentionError) && (
+          <section className="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950" aria-label="Inventory reconciliation queue">
+            <h2 className="font-black">Inventory needs attention ({inventoryAttentionOrders.length})</h2>
+            {inventoryAttentionError && <p className="mt-1">Could not load the saved inventory queue: {inventoryAttentionError}</p>}
+            {inventoryAttentionOrders.slice(0, 5).map(order => (
+              <div key={order.id} className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-amber-200 pt-2">
+                <div>
+                  <strong>{order.orderNumber}</strong> — {order.inventorySyncStatus === 'PENDING' ? 'stock sync pending' : 'menu recipe/stock mapping required'}
+                  {order.inventorySyncError && <p className="text-xs">{order.inventorySyncError}</p>}
+                </div>
+                {order.inventorySyncStatus === 'PENDING' && (
+                  <button
+                    type="button"
+                    disabled={loading}
+                    onClick={() => { void retryInventorySync(order).catch(() => {}); }}
+                    className="rounded-lg bg-amber-900 px-3 py-2 font-bold text-white disabled:opacity-50"
+                  >Retry stock sync</button>
+                )}
+              </div>
+            ))}
+            {inventoryAttentionOrders.length > 5 && <p className="mt-2 text-xs">Showing 5 of {inventoryAttentionOrders.length}; resolve the older orders before live service.</p>}
+            {inventoryAttentionOrders.some(order => order.inventorySyncStatus === 'NOT_CONFIGURED') && (
+              <p className="mt-2 text-xs">Map each menu item to a recipe or tracked inventory item. Multi-size dishes need size-specific recipes. These orders will not be auto-deducted from guessed quantities.</p>
+            )}
+          </section>
         )}
 
         {/* Catalog Grid */}
@@ -220,9 +251,9 @@ export function PosPage() {
                         <h3 className="font-black text-[#800000] text-sm md:text-base line-clamp-2 group-hover:underline">
                           {product.name}
                         </h3>
-                        {product.comboDescription && (
+                        {(product.description || product.comboDescription) && (
                           <p className="text-xs text-[#800000]/70 mt-1 line-clamp-2">
-                            {product.comboDescription}
+                            {product.description || product.comboDescription}
                           </p>
                         )}
                       </div>
@@ -405,6 +436,7 @@ export function PosPage() {
         <ReceiptModal
           order={lastCompletedOrder}
           onClose={clearCompletedOrder}
+          onRetryInventory={retryInventorySync}
         />
       )}
     </div>

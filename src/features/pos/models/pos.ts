@@ -37,6 +37,9 @@ export interface Product {
   price: number;
   category: string;
   imageUrl?: string;
+  description?: string;
+  inventoryItemId?: string;
+  sizeRecipeIds?: Partial<Record<ItemSize, string>>;
   isAvailable: boolean;
   active?: boolean;
   recipeId?: string;
@@ -70,6 +73,8 @@ export interface OrderItem {
   notes?: string;
   unitCost?: number;
   recipeId?: string;
+  inventoryItemId?: string;
+  sizeRecipeIds?: Partial<Record<ItemSize, string>>;
   isCombo?: boolean;
   comboComponents?: ComboComponent[];
   isVeg?: boolean;
@@ -94,6 +99,19 @@ export interface PaymentDetails {
     card?: number;
   };
 }
+
+export interface InventoryDeductionPlanItem {
+  idempotencyKey: string;
+  itemId: string;
+  quantity: number;
+  referenceId: string;
+  notes: string;
+  unitCost: number;
+  totalCost: number;
+  performedBy: string;
+}
+
+export type InventorySyncStatus = 'NOT_CONFIGURED' | 'PENDING' | 'SYNCED';
 
 export interface Order {
   id: string;
@@ -120,6 +138,9 @@ export interface Order {
   voidReason?: string;
   createdAt: string;
   totalCost?: number;
+  inventorySyncStatus?: InventorySyncStatus;
+  inventorySyncError?: string;
+  inventoryPlan?: InventoryDeductionPlanItem[];
 }
 
 export interface ParkedOrder {

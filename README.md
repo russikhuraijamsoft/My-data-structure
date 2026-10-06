@@ -36,7 +36,7 @@ Review and deploy `firestore.rules` to the configured Firestore database before 
 The application is still under development. Passing the build and unit tests does not make every module production-ready.
 
 - Orders now fail visibly when Firestore rejects a save; the POS cart remains available. Durable offline order synchronization is not implemented.
-- POS bills and kitchen tickets now save in one atomic batch. Concurrent checkout clicks are blocked. Inventory deductions remain separate and need a reconciled/idempotent workflow before live service. Refresh/retry recovery also needs a durable checkout identifier.
+- POS bills and kitchen tickets save in one atomic batch. Inventory deductions follow the paid-order commit through an order-stored movement plan and deterministic idempotency keys; failed movements are visible and retryable from the receipt/POS reconciliation queue without deducting already-applied lines twice. Missing recipes or stock mappings are flagged as `NOT_CONFIGURED`; the system does not guess ingredient quantities. This still requires real recipe/size mappings before live service, and refunds/reversals remain separate work.
 - Public kiosk ordering is disabled until a secure backend order/payment flow is configured; simulation methods cannot write paid orders.
 - PIN/biometric login is not implemented.
 - The home dashboard and sales reports now use saved paid orders with India calendar dates. They show zero for an empty database and errors when reads fail. Profit/expense data is not fabricated. Other business modules still need sample data removed before operational use.
@@ -46,7 +46,7 @@ The application is still under development. Passing the build and unit tests doe
 
 ## Verification
 
-`npm run lint`, `npm test`, and `npm run build` validate types, unit tests, and production compilation. Tests cover failed POS writes, retention of the cart after failure, optional-field serialization, and preventing menu overwrites during reads.
+`npm run lint`, `npm test`, and `npm run build` validate types, unit tests, and production compilation. Tests cover failed POS writes, cart retention on save failure, atomic menu behaviors, inventory transaction idempotency/shortage/missing-item errors, recipe-scaled combo plans, and visible/retryable checkout inventory failures.
 
 ## Counter and kitchen test flow
 
