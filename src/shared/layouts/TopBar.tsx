@@ -125,14 +125,14 @@ export function TopBar({ isMenuOpen, onMenuClick }: TopBarProps) {
             aria-label="Search modules"
             aria-describedby="module-search-shortcut"
             placeholder="Search modules"
-            className="w-36 rounded-lg border border-[#ebd5da] bg-[#fdf5f6] py-2 pl-9 pr-3 text-sm font-medium text-[#800000] placeholder-[#800000]/50 transition-all focus:w-44 focus:outline-none focus:ring-2 focus:ring-[#800000] sm:w-52 sm:pr-16 sm:focus:w-64 lg:w-64 lg:focus:w-80"
+            className="w-28 rounded-lg border border-[#ebd5da] bg-[#fdf5f6] py-2 pl-9 pr-3 text-sm font-medium text-[#800000] placeholder-[#800000]/50 transition-all focus:w-44 focus:outline-none focus:ring-2 focus:ring-[#800000] sm:w-52 sm:pr-16 sm:focus:w-64 lg:w-64 lg:focus:w-80"
           />
           <span id="module-search-shortcut" className="pointer-events-none absolute right-3 hidden rounded border border-[#ebd5da] bg-white px-1.5 py-0.5 text-[10px] font-semibold text-[#800000]/60 sm:inline">
             Ctrl/⌘ K
           </span>
 
           {isSearchOpen && (
-            <div id="module-search-results" role="region" aria-label="Matching modules" className="absolute left-0 top-full z-50 mt-2 w-72 max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-[#ebd5da] bg-white shadow-xl sm:w-80">
+            <div id="module-search-results" role="region" aria-label="Matching modules" className="absolute left-0 top-full z-50 mt-2 w-72 max-w-[calc(100vw-5rem)] overflow-hidden rounded-xl border border-[#ebd5da] bg-white shadow-xl sm:w-80">
               <div className="flex items-center justify-between border-b border-[#ebd5da] px-4 py-3">
                 <p className="text-xs font-bold uppercase tracking-wide text-[#800000]/70">Jump to a module</p>
                 <span className="text-[10px] font-medium text-[#800000]/60">Esc to close</span>
