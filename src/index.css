@@ -59,6 +59,8 @@ html, body, #root {
 
 .dark {
   color-scheme: dark;
+  background-color: #171214;
+  color: #fff4f6;
   --color-background: #171214;
   --color-foreground: #fff4f6;
   --color-border: #49383d;
