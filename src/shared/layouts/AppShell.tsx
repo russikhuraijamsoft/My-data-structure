@@ -39,7 +39,7 @@ export function AppShell() {
         <main
           id="main-content"
           tabIndex={-1}
-          className={`flex-1 overflow-y-auto bg-[#ffffff] focus:outline-none ${isFullScreenRoute ? 'p-2 md:p-4' : 'p-4 lg:p-8'}`}
+          className={`flex-1 overflow-y-auto bg-[#ffffff] focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#800000] ${isFullScreenRoute ? 'p-2 md:p-4' : 'p-4 lg:p-8'}`}
         >
           <div className={`mx-auto h-full ${isFullScreenRoute ? 'max-w-none' : 'max-w-7xl'}`}>
             <Outlet />
