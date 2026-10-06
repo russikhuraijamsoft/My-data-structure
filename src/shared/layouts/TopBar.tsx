@@ -75,9 +75,23 @@ export function TopBar({ isMenuOpen, onMenuClick }: TopBarProps) {
     .filter((item) => !normalizedQuery || item.name.toLowerCase().includes(normalizedQuery))
     .slice(0, 6);
   const displayName = profile?.displayName || user?.email?.split('@')[0] || 'User';
+  const canOpenSettings = (profile?.roles || ['OWNER']).some((role) => ['OWNER', 'ADMIN', 'MANAGER'].includes(role));
 
   const handleThemeToggle = () => {
     setTheme(isDark ? 'light' : 'dark');
+  };
+
+  const handleSearchKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Enter' && searchResults[0]) {
+      event.preventDefault();
+      navigate(searchResults[0].to);
+      handleSearchResultClick();
+    }
+
+    if (event.key === 'Escape') {
+      setIsSearchOpen(false);
+      searchInputRef.current?.blur();
+    }
   };
 
   const handleSearchResultClick = () => {
@@ -106,31 +120,29 @@ export function TopBar({ isMenuOpen, onMenuClick }: TopBarProps) {
             type="search"
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
+            onKeyDown={handleSearchKeyDown}
             onFocus={() => setIsSearchOpen(true)}
             aria-label="Search modules"
-            aria-controls="module-search-results"
-            aria-expanded={isSearchOpen}
-            aria-autocomplete="list"
+            aria-describedby="module-search-shortcut"
             placeholder="Search modules"
             className="w-36 rounded-lg border border-[#ebd5da] bg-[#fdf5f6] py-2 pl-9 pr-3 text-sm font-medium text-[#800000] placeholder-[#800000]/50 transition-all focus:w-44 focus:outline-none focus:ring-2 focus:ring-[#800000] sm:w-52 sm:pr-16 sm:focus:w-64 lg:w-64 lg:focus:w-80"
           />
-          <span className="pointer-events-none absolute right-3 hidden rounded border border-[#ebd5da] bg-white px-1.5 py-0.5 text-[10px] font-semibold text-[#800000]/60 sm:inline">
-            Ctrl K
+          <span id="module-search-shortcut" className="pointer-events-none absolute right-3 hidden rounded border border-[#ebd5da] bg-white px-1.5 py-0.5 text-[10px] font-semibold text-[#800000]/60 sm:inline">
+            Ctrl/⌘ K
           </span>
 
           {isSearchOpen && (
-            <div className="absolute left-0 top-full z-50 mt-2 w-72 max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-[#ebd5da] bg-white shadow-xl sm:w-80">
+            <div id="module-search-results" role="region" aria-label="Matching modules" className="absolute left-0 top-full z-50 mt-2 w-72 max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-[#ebd5da] bg-white shadow-xl sm:w-80">
               <div className="flex items-center justify-between border-b border-[#ebd5da] px-4 py-3">
                 <p className="text-xs font-bold uppercase tracking-wide text-[#800000]/70">Jump to a module</p>
                 <span className="text-[10px] font-medium text-[#800000]/60">Esc to close</span>
               </div>
 
               {searchResults.length > 0 ? (
-                <ul id="module-search-results" role="listbox" aria-label="Matching modules" className="max-h-80 overflow-y-auto p-2">
+                <ul className="max-h-80 overflow-y-auto p-2">
                   {searchResults.map((item) => (
                     <li key={item.name}>
                       <Link
-                        role="option"
                         to={item.to}
                         onClick={handleSearchResultClick}
                         className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold text-[#800000] transition-colors hover:bg-[#fdf5f6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#800000]"
@@ -186,7 +198,6 @@ export function TopBar({ isMenuOpen, onMenuClick }: TopBarProps) {
             type="button"
             onClick={() => setIsProfileMenuOpen((open) => !open)}
             aria-label={`Account menu for ${displayName}`}
-            aria-haspopup="true"
             aria-expanded={isProfileMenuOpen}
             aria-controls="account-menu"
             className="flex cursor-pointer items-center gap-2.5 rounded-lg p-1.5 transition-colors hover:bg-[#fdf5f6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#800000]"
@@ -209,14 +220,16 @@ export function TopBar({ isMenuOpen, onMenuClick }: TopBarProps) {
                 <p className="truncate text-sm font-bold text-[#800000]">{displayName}</p>
                 <p className="truncate text-xs font-medium text-[#800000]/70">{user?.email || 'Signed-in account'}</p>
               </div>
-              <Link
-                to="/settings"
-                onClick={() => setIsProfileMenuOpen(false)}
-                className="flex w-full items-center gap-2 px-4 py-2.5 text-sm font-medium text-[#800000] transition-colors hover:bg-[#fdf5f6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#800000]"
-              >
-                <Settings aria-hidden="true" className="h-4 w-4" />
-                Settings
-              </Link>
+              {canOpenSettings && (
+                <Link
+                  to="/settings"
+                  onClick={() => setIsProfileMenuOpen(false)}
+                  className="flex w-full items-center gap-2 px-4 py-2.5 text-sm font-medium text-[#800000] transition-colors hover:bg-[#fdf5f6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#800000]"
+                >
+                  <Settings aria-hidden="true" className="h-4 w-4" />
+                  Settings
+                </Link>
+              )}
               <button
                 type="button"
                 onClick={() => {
