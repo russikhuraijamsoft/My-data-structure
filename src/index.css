@@ -153,3 +153,24 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #800000;
 }
+
+.dark [class~="focus:ring-[#800000]"]:focus,
+.dark [class~="focus-visible:ring-[#800000]"]:focus-visible {
+  --tw-ring-color: #e36a83 !important;
+}
+
+.dark [class~="focus-visible:ring-offset-2"] {
+  --tw-ring-offset-color: #1f191b !important;
+}
+
+.dark ::-webkit-scrollbar-track {
+  background: #171214;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #75545e;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #d0395c;
+}
