@@ -11,6 +11,7 @@ import {
   signInWithPhoneNumber,
   ConfirmationResult
 } from 'firebase/auth';
+import { FirebaseAuthentication } from '@capacitor-firebase/authentication';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../../../core/firebase/firebaseConfig';
 import { logger } from '../../../core/logging/logger';
@@ -48,10 +49,25 @@ class AuthService {
 
   async loginWithGoogle(): Promise<User> {
     if (!auth) throw new Error('Firebase not initialized');
+    
+    // Use native plugin on mobile, popup on web
+    const isMobile = typeof window !== 'undefined' && (window as any).Capacitor;
+    if (isMobile) {
+      const result = await FirebaseAuthentication.signInWithGoogle();
+      // The native plugin handles auth state automatically
+      const user = auth.currentUser;
+      if (!user) throw new Error('Google sign-in failed');
+      
+      const profile = await this.getUserProfile(user.uid);
+      if (!profile) {
+        await this.createUserProfile(user, user.displayName || 'Google User');
+      }
+      return user;
+    }
+    
     const provider = new GoogleAuthProvider();
     const userCredential = await signInWithPopup(auth, provider);
     
-    // Check if profile exists, if not create one
     const profile = await this.getUserProfile(userCredential.user.uid);
     if (!profile) {
       await this.createUserProfile(userCredential.user, userCredential.user.displayName || 'Google User');
