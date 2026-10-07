@@ -32,6 +32,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     let active = true;
     let revision = 0;
+
+    // Handle redirect result on app load (for mobile/Capacitor)
+    authService.handleRedirectResult().then((user) => {
+      if (user && active) {
+        setUser(user);
+        setProfile(null);
+        setLoading(true);
+        authService.getUserProfile(user.uid).then((profile) => {
+          if (active) {
+            setProfile(profile);
+            setLoading(false);
+          }
+        }).catch(() => {
+          if (active) setLoading(false);
+        });
+      }
+    }).catch(() => {});
+
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       const requestRevision = ++revision;
       setUser(currentUser);

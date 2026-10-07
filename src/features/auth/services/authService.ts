@@ -2,6 +2,8 @@ import {
   createUserWithEmailAndPassword, 
   signInWithEmailAndPassword,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   GoogleAuthProvider,
   OAuthProvider,
   sendPasswordResetEmail,
@@ -57,6 +59,23 @@ class AuthService {
     }
     
     return userCredential.user;
+  }
+
+  async handleRedirectResult(): Promise<User | null> {
+    if (!auth) return null;
+    try {
+      const result = await getRedirectResult(auth);
+      if (result) {
+        const profile = await this.getUserProfile(result.user.uid);
+        if (!profile) {
+          await this.createUserProfile(result.user, result.user.displayName || 'Google User');
+        }
+        return result.user;
+      }
+    } catch (error) {
+      logger.warn('Failed to handle redirect result', error);
+    }
+    return null;
   }
 
   async loginWithApple(): Promise<User> {
