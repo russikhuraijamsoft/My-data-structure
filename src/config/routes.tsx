@@ -6,51 +6,51 @@ import { SplashScreen } from '../shared/components/SplashScreen';
 
 // Auth Pages
 import { AuthLayout } from '../features/auth/pages/AuthLayout';
-import { LoginPage } from '../features/auth/pages/LoginPage';
-import { RegisterPage } from '../features/auth/pages/RegisterPage';
-import { ForgotPasswordPage } from '../features/auth/pages/ForgotPasswordPage';
-import { PhoneAuthPage } from '../features/auth/pages/PhoneAuthPage';
-import { PinAuthPage } from '../features/auth/pages/PinAuthPage';
+const LoginPage = React.lazy(() => import('../features/auth/pages/LoginPage').then(module => ({ default: module.LoginPage })));
+const RegisterPage = React.lazy(() => import('../features/auth/pages/RegisterPage').then(module => ({ default: module.RegisterPage })));
+const ForgotPasswordPage = React.lazy(() => import('../features/auth/pages/ForgotPasswordPage').then(module => ({ default: module.ForgotPasswordPage })));
+const PhoneAuthPage = React.lazy(() => import('../features/auth/pages/PhoneAuthPage').then(module => ({ default: module.PhoneAuthPage })));
+const PinAuthPage = React.lazy(() => import('../features/auth/pages/PinAuthPage').then(module => ({ default: module.PinAuthPage })));
 
 // Dashboard
-import { DashboardPage } from '../features/dashboard/pages/DashboardPage';
+const DashboardPage = React.lazy(() => import('../features/dashboard/pages/DashboardPage').then(module => ({ default: module.DashboardPage })));
 
 // POS
-import { PosPage } from '../features/pos/pages/PosPage';
+const PosPage = React.lazy(() => import('../features/pos/pages/PosPage').then(module => ({ default: module.PosPage })));
 
 // KDS
-import { KdsPage } from '../features/kds/pages/KdsPage';
+const KdsPage = React.lazy(() => import('../features/kds/pages/KdsPage').then(module => ({ default: module.KdsPage })));
 
 // Self-Ordering Kiosk
-import { KioskPage } from '../features/kiosk/pages/KioskPage';
+const KioskPage = React.lazy(() => import('../features/kiosk/pages/KioskPage').then(module => ({ default: module.KioskPage })));
 
 // Purchasing
-import { PurchasingPage } from '../features/purchasing/pages/PurchasingPage';
+const PurchasingPage = React.lazy(() => import('../features/purchasing/pages/PurchasingPage').then(module => ({ default: module.PurchasingPage })));
 
 // Inventory
-import { InventoryPage } from '../features/inventory/pages/InventoryPage';
+const InventoryPage = React.lazy(() => import('../features/inventory/pages/InventoryPage').then(module => ({ default: module.InventoryPage })));
 
 // CRM
-import { CrmPage } from '../features/crm/pages/CrmPage';
+const CrmPage = React.lazy(() => import('../features/crm/pages/CrmPage').then(module => ({ default: module.CrmPage })));
 
 // Manufacturing
-import { ManufacturingPage } from '../features/manufacturing/pages/ManufacturingPage';
+const ManufacturingPage = React.lazy(() => import('../features/manufacturing/pages/ManufacturingPage').then(module => ({ default: module.ManufacturingPage })));
 
 // Table Management
-import { TableManagementPage } from '../features/table-management/pages/TableManagementPage';
+const TableManagementPage = React.lazy(() => import('../features/table-management/pages/TableManagementPage').then(module => ({ default: module.TableManagementPage })));
 
 // Finance & HR
-import { FinancePage } from '../features/finance/pages/FinancePage';
-import { HrPage } from '../features/hr/pages/HrPage';
+const FinancePage = React.lazy(() => import('../features/finance/pages/FinancePage').then(module => ({ default: module.FinancePage })));
+const HrPage = React.lazy(() => import('../features/hr/pages/HrPage').then(module => ({ default: module.HrPage })));
 
 // AI
-import { AiPage } from '../features/ai/pages/AiPage';
+const AiPage = React.lazy(() => import('../features/ai/pages/AiPage').then(module => ({ default: module.AiPage })));
 
 // Reports
-import { ReportsPage } from '../features/reports/pages/ReportsPage';
+const ReportsPage = React.lazy(() => import('../features/reports/pages/ReportsPage').then(module => ({ default: module.ReportsPage })));
 
 // Admin / Settings
-import { AdminPage } from '../features/admin/pages/AdminPage';
+const AdminPage = React.lazy(() => import('../features/admin/pages/AdminPage').then(module => ({ default: module.AdminPage })));
 
 // Auth Guard
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -70,17 +70,17 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
 export const router = createBrowserRouter([
   {
     path: '/kiosk',
-    element: <KioskPage />,
+    element: <React.Suspense fallback={<SplashScreen />}><KioskPage /></React.Suspense>,
   },
   {
     path: '/auth',
     element: <AuthLayout />,
     children: [
-      { index: true, element: <LoginPage /> },
-      { path: 'register', element: <RegisterPage /> },
-      { path: 'forgot-password', element: <ForgotPasswordPage /> },
-      { path: 'phone', element: <PhoneAuthPage /> },
-      { path: 'pin', element: <PinAuthPage /> },
+      { index: true, element: <React.Suspense fallback={<SplashScreen />}><LoginPage /></React.Suspense> },
+      { path: 'register', element: <React.Suspense fallback={<SplashScreen />}><RegisterPage /></React.Suspense> },
+      { path: 'forgot-password', element: <React.Suspense fallback={<SplashScreen />}><ForgotPasswordPage /></React.Suspense> },
+      { path: 'phone', element: <React.Suspense fallback={<SplashScreen />}><PhoneAuthPage /></React.Suspense> },
+      { path: 'pin', element: <React.Suspense fallback={<SplashScreen />}><PinAuthPage /></React.Suspense> },
     ]
   },
   {
@@ -93,59 +93,59 @@ export const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: <DashboardPage />,
+        element: <React.Suspense fallback={<SplashScreen />}><DashboardPage /></React.Suspense>,
       },
       {
         path: 'pos',
-        element: <PosPage />,
+        element: <React.Suspense fallback={<SplashScreen />}><PosPage /></React.Suspense>,
       },
       {
         path: 'kiosk',
-        element: <KioskPage />,
+        element: <React.Suspense fallback={<SplashScreen />}><KioskPage /></React.Suspense>,
       },
       {
         path: 'kds',
-        element: <KdsPage />,
+        element: <React.Suspense fallback={<SplashScreen />}><KdsPage /></React.Suspense>,
       },
       {
         path: 'purchasing',
-        element: <PurchasingPage />,
+        element: <React.Suspense fallback={<SplashScreen />}><PurchasingPage /></React.Suspense>,
       },
       {
         path: 'inventory',
-        element: <InventoryPage />,
+        element: <React.Suspense fallback={<SplashScreen />}><InventoryPage /></React.Suspense>,
       },
       {
         path: 'manufacturing',
-        element: <ManufacturingPage />,
+        element: <React.Suspense fallback={<SplashScreen />}><ManufacturingPage /></React.Suspense>,
       },
       {
         path: 'tables',
-        element: <TableManagementPage />,
+        element: <React.Suspense fallback={<SplashScreen />}><TableManagementPage /></React.Suspense>,
       },
       {
         path: 'crm',
-        element: <CrmPage />,
+        element: <React.Suspense fallback={<SplashScreen />}><CrmPage /></React.Suspense>,
       },
       {
         path: 'hr',
-        element: <HrPage />,
+        element: <React.Suspense fallback={<SplashScreen />}><HrPage /></React.Suspense>,
       },
       {
         path: 'finance',
-        element: <FinancePage />,
+        element: <React.Suspense fallback={<SplashScreen />}><FinancePage /></React.Suspense>,
       },
       {
         path: 'ai',
-        element: <AiPage />,
+        element: <React.Suspense fallback={<SplashScreen />}><AiPage /></React.Suspense>,
       },
       {
         path: 'reports',
-        element: <ReportsPage />,
+        element: <React.Suspense fallback={<SplashScreen />}><ReportsPage /></React.Suspense>,
       },
       {
         path: 'settings',
-        element: <AdminPage />,
+        element: <React.Suspense fallback={<SplashScreen />}><AdminPage /></React.Suspense>,
       },
       {
         path: 'gcloud',

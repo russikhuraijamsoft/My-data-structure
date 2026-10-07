@@ -1,6 +1,5 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
-import path from 'path';
 import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
@@ -8,7 +7,33 @@ export default defineConfig(() => {
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, '.'),
+        '@': import.meta.dirname,
+      },
+    },
+    build: {
+      rolldownOptions: {
+        output: {
+          codeSplitting: {
+            maxSize: 450 * 1024,
+            groups: [
+              {
+                name: 'react-vendor',
+                test: /(?:^|[\\/])node_modules[\\/](?:react|react-dom|react-is|react-router|react-router-dom|scheduler)[\\/]/,
+                priority: 30,
+              },
+              {
+                name: 'firebase-vendor',
+                test: /(?:^|[\\/])node_modules[\\/](?:@firebase|firebase)[\\/]/,
+                priority: 20,
+              },
+              {
+                name: 'recharts-vendor',
+                test: /(?:^|[\\/])node_modules[\\/](?:recharts|d3-[^\\/]+|victory-vendor)[\\/]/,
+                priority: 10,
+              },
+            ],
+          },
+        },
       },
     },
     server: {
