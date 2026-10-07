@@ -58,13 +58,79 @@ html, body, #root {
 }
 
 .dark {
-  --color-background: #ffffff;
-  --color-foreground: #800000;
-  --color-border: #ebd5da;
-  --color-muted: #fdf5f6;
-  --color-muted-foreground: #800000;
-  --color-primary: #800000;
+  color-scheme: dark;
+  background-color: #171214;
+  color: #fff4f6;
+  --color-background: #171214;
+  --color-foreground: #fff4f6;
+  --color-border: #49383d;
+  --color-muted: #261a1e;
+  --color-muted-foreground: #e5cbd0;
+  --color-primary: #d0395c;
   --color-primary-foreground: #ffffff;
+}
+
+.dark body,
+.dark #root {
+  background-color: #171214;
+  color: #fff4f6;
+}
+
+/* The existing screens use Tailwind's literal brand colors. Re-map those
+   surfaces here so the saved dark theme also applies to existing modules. */
+.dark [class~="bg-white"],
+.dark [class~="bg-[#ffffff]"] {
+  background-color: #1f191b !important;
+}
+
+.dark [class~="bg-[#fdf5f6]"],
+.dark [class~="bg-[#fcf2f4]"] {
+  background-color: #2a1e22 !important;
+}
+
+.dark [class~="bg-[#fee8eb]"] {
+  background-color: #40252c !important;
+}
+
+.dark [class~="border-[#ebd5da]"] {
+  border-color: #4b3940 !important;
+}
+
+.dark [class~="text-[#800000]"] {
+  color: #fff0f2 !important;
+}
+
+.dark [class~="text-[#800000]/80"] {
+  color: #f0dbe0 !important;
+}
+
+.dark [class~="text-[#800000]/70"] {
+  color: #e1c7ce !important;
+}
+
+.dark [class~="text-[#800000]/60"] {
+  color: #d1b4bd !important;
+}
+
+.dark [class~="text-[#800000]/50"] {
+  color: #c1a1aa !important;
+}
+
+.dark [class~="placeholder-[#800000]/50"]::placeholder {
+  color: #c1a1aa !important;
+}
+
+.dark [class~="hover:bg-[#fdf5f6]"]:hover,
+.dark [class~="hover:bg-[#fcf2f4]"]:hover {
+  background-color: #36272c !important;
+}
+
+.dark [class~="hover:bg-[#fee8eb]"]:hover {
+  background-color: #4b2932 !important;
+}
+
+.dark [class~="hover:text-[#800000]"]:hover {
+  color: #fff0f2 !important;
 }
 
 body {
@@ -88,4 +154,25 @@ body {
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #800000;
+}
+
+.dark [class~="focus:ring-[#800000]"]:focus,
+.dark [class~="focus-visible:ring-[#800000]"]:focus-visible {
+  --tw-ring-color: #e36a83 !important;
+}
+
+.dark [class~="focus-visible:ring-offset-2"] {
+  --tw-ring-offset-color: #1f191b !important;
+}
+
+.dark ::-webkit-scrollbar-track {
+  background: #171214;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #75545e;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #d0395c;
 }

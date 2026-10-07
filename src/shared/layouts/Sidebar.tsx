@@ -1,5 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
+import { X } from 'lucide-react';
 import { useAuth } from '../../core/auth/AuthContext';
 import { getVisibleNavigation } from './navigation';
 
@@ -33,7 +34,7 @@ export function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
           ${isOpen ? 'translate-x-0' : '-translate-x-full'}
         `}
       >
-        <div className="flex h-16 items-center border-b border-[#ebd5da] px-6">
+        <div className="flex h-16 items-center justify-between border-b border-[#ebd5da] px-6">
           <div className="flex items-center gap-2.5">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#800000] shadow-xs">
               <span className="text-xl font-bold leading-none text-white">T</span>
@@ -43,6 +44,14 @@ export function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
               <span className="-mt-1 text-[10px] font-semibold uppercase tracking-widest text-[#800000]/70">Enterprise</span>
             </div>
           </div>
+          <button
+            type="button"
+            onClick={() => setIsOpen(false)}
+            aria-label="Close navigation menu"
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-[#800000] transition-colors hover:bg-[#fdf5f6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#800000] lg:hidden"
+          >
+            <X aria-hidden="true" className="h-5 w-5" />
+          </button>
         </div>
 
         <nav aria-label="Restaurant modules" className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
