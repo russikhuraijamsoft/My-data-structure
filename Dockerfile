@@ -14,10 +14,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy package manifests first for optimal layer caching
-COPY package.json package-lock.json* bun.lock* ./
+COPY package.json package-lock.json ./
 
 # Install all dependencies (including devDependencies required for vite build)
-RUN npm install
+RUN npm ci
 
 # Copy application source code and configurations
 COPY . .
@@ -43,10 +43,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy package manifests
-COPY package.json package-lock.json* bun.lock* ./
+COPY package.json package-lock.json ./
 
 # Install production dependencies only to minimize image size and attack surface
-RUN npm install --omit=dev
+RUN npm ci --omit=dev && npm cache clean --force
 
 # Copy compiled frontend distribution from builder
 COPY --from=builder /app/dist ./dist

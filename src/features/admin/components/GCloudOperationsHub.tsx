@@ -7,18 +7,10 @@ import {
 interface GCloudStatus {
   status: string;
   uptimeSeconds: number;
-  memoryUsage: {
-    heapUsed: number;
-    heapTotal: number;
-    rss: number;
-  };
-  gcp: {
-    projectId: string;
-    region: string;
-    firestoreDatabaseId: string;
-    cloudRunPort: number;
-    aiModel: string;
-    hasGeminiApiKey: boolean;
+  gcp?: {
+    projectId?: string;
+    region?: string;
+    firestoreDatabaseId?: string;
   };
 }
 
@@ -32,24 +24,26 @@ export function GCloudOperationsHub() {
   const fetchHealth = async () => {
     setIsLoadingHealth(true);
     try {
-      const res = await fetch('/api/health');
-      if (res.ok) {
-        const data = await res.json();
-        setHealthData(data);
+      const [healthResponse, gcloudResponse] = await Promise.all([
+        fetch('/api/health'),
+        fetch('/api/gcloud/status'),
+      ]);
+      if (healthResponse.ok) {
+        const [health, gcloud] = await Promise.all([
+          healthResponse.json(),
+          gcloudResponse.ok ? gcloudResponse.json() : Promise.resolve(null),
+        ]);
+        setHealthData({ ...health, gcp: gcloud || undefined });
       }
     } catch {
       // Degraded / offline probe fallback
       setHealthData({
         status: 'healthy',
         uptimeSeconds: 120,
-        memoryUsage: { heapUsed: 42000000, heapTotal: 68000000, rss: 85000000 },
         gcp: {
           projectId: 'gen-lang-client-0658820145',
           region: 'asia-southeast1',
           firestoreDatabaseId: 'ai-studio-talkosarchitectu-438c4707-59bb-4b28-aa84-26b8ca15c574',
-          cloudRunPort: 8080,
-          aiModel: 'gemini-2.5-flash',
-          hasGeminiApiKey: true
         }
       });
     } finally {
@@ -287,20 +281,20 @@ env_variables:
           <div className="bg-black/20 rounded-xl p-3 border border-white/10">
             <div className="text-[10px] font-bold text-white/70 uppercase tracking-wider">Target Project</div>
             <div className="text-xs font-black text-white truncate mt-0.5">
-              {healthData?.gcp.projectId || 'gen-lang-client-0658820145'}
+              {healthData?.gcp?.projectId || 'gen-lang-client-0658820145'}
             </div>
           </div>
           <div className="bg-black/20 rounded-xl p-3 border border-white/10">
             <div className="text-[10px] font-bold text-white/70 uppercase tracking-wider">Cloud Run Region</div>
             <div className="text-xs font-black text-white flex items-center gap-1 mt-0.5">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-              {healthData?.gcp.region || 'asia-southeast1'}
+              {healthData?.gcp?.region || 'asia-southeast1'}
             </div>
           </div>
           <div className="bg-black/20 rounded-xl p-3 border border-white/10">
             <div className="text-[10px] font-bold text-white/70 uppercase tracking-wider">Firestore Enterprise DB</div>
-            <div className="text-xs font-black text-white truncate mt-0.5" title={healthData?.gcp.firestoreDatabaseId}>
-              {healthData?.gcp.firestoreDatabaseId ? 'ai-studio-talkos...' : 'Connected'}
+            <div className="text-xs font-black text-white truncate mt-0.5" title={healthData?.gcp?.firestoreDatabaseId}>
+              {healthData?.gcp?.firestoreDatabaseId ? 'ai-studio-talkos...' : 'Connected'}
             </div>
           </div>
           <div className="bg-black/20 rounded-xl p-3 border border-white/10">
