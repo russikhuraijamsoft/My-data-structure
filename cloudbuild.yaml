@@ -13,9 +13,10 @@ steps:
     args:
       - '-c'
       - |
-        npm install
+        npm ci
         npm run lint
         npm test
+        npm run build
 
   # ----------------------------------------------------------------------------
   # Step 2: Build container image using Docker

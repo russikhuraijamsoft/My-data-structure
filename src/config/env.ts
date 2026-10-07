@@ -8,7 +8,7 @@ export const env = {
     appId: import.meta.env.VITE_FIREBASE_APP_ID || '',
   },
   app: {
-    env: import.meta.env.VITE_ENV || 'development',
-    logLevel: import.meta.env.VITE_LOG_LEVEL || 'debug',
+    env: import.meta.env.VITE_ENV || import.meta.env.MODE,
+    logLevel: import.meta.env.VITE_LOG_LEVEL || (import.meta.env.PROD ? 'warn' : 'debug'),
   }
 };
