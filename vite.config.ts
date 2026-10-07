@@ -11,10 +11,11 @@ export default defineConfig(() => {
       },
     },
     build: {
+      // firebase-vendor (~590 kB) must stay one chunk: splitting it with maxSize broke module init order in prod.
+      chunkSizeWarningLimit: 650,
       rolldownOptions: {
         output: {
           codeSplitting: {
-            maxSize: 450 * 1024,
             groups: [
               {
                 name: 'react-vendor',
