@@ -1,10 +1,10 @@
-import { collection, query, getDocs, doc, setDoc, updateDoc } from 'firebase/firestore';
+import { collection, query, getDocs, doc, setDoc, updateDoc, writeBatch, runTransaction } from 'firebase/firestore';
 import { db } from '../../../core/firebase/firebaseConfig';
+import type { Ticket } from '../../kds/models/kds';
 import { Product, Order, MenuItemSize } from '../models/pos';
 import { INITIAL_MENU_ITEMS, getAllMenuItemSizes } from '../data/menuData';
 
 class PosService {
-  private hasInitializedMenu = false;
 
   async getProducts(): Promise<Product[]> {
     if (!db) {
@@ -14,15 +14,6 @@ class PosService {
       const q = query(collection(db, 'pos_products'));
       const snapshot = await getDocs(q);
       
-      if (snapshot.empty || !this.hasInitializedMenu) {
-        await this.syncInitialMenu(snapshot.empty);
-        this.hasInitializedMenu = true;
-        const updatedSnap = await getDocs(q);
-        if (!updatedSnap.empty) {
-          return updatedSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product));
-        }
-      }
-
       const products = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product));
       return products.length > 0 ? products : INITIAL_MENU_ITEMS;
     } catch (error) {
@@ -87,60 +78,94 @@ class PosService {
   private localOrders: Order[] = [];
 
   async getOrders(): Promise<Order[]> {
-    if (!db) return this.localOrders;
+    if (!db) throw new Error("Order storage is unavailable. Check Firebase configuration.");
     try {
       const q = query(collection(db, 'pos_orders'));
       const snapshot = await getDocs(q);
       const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
       orders.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-      if (orders.length > 0) {
-        this.localOrders = orders;
-        return orders;
-      }
-      return this.localOrders;
+      this.localOrders = orders;
+      return orders;
     } catch (err) {
-      console.warn("Falling back to local orders due to error:", err);
-      return this.localOrders;
+      console.warn("Could not load orders:", err);
+      throw err;
     }
   }
 
   async updateOrderStatus(orderId: string, status: Order['status'], voidReason?: string): Promise<void> {
-    const orderIndex = this.localOrders.findIndex(o => o.id === orderId);
-    if (orderIndex > -1) {
-      this.localOrders[orderIndex] = {
-        ...this.localOrders[orderIndex],
-        status,
-        ...(voidReason ? { voidReason } : {})
-      };
-    }
-    if (db) {
-      try {
-        await updateDoc(doc(db, 'pos_orders', orderId), {
-          status,
-          ...(voidReason ? { voidReason } : {}),
-          updatedAt: new Date().toISOString()
-        });
-      } catch (err) {
-        console.warn("Could not update order status in Firestore:", err);
+    if (!db) throw new Error('Order storage is unavailable.');
+    await runTransaction(db, async transaction => {
+      const orderRef = doc(db, 'pos_orders', orderId);
+      const ticketRef = doc(db, 'tickets', `ticket_${orderId}`);
+      const ticket = await transaction.get(ticketRef);
+      transaction.update(orderRef, { status, ...(voidReason ? { voidReason } : {}), updatedAt: new Date().toISOString() });
+      if (ticket.exists() && (status === 'CANCELLED' || status === 'REFUNDED')) {
+        transaction.update(ticketRef, { status: 'CANCELLED' });
       }
-    }
+    });
+    this.localOrders = this.localOrders.map(order => order.id === orderId
+      ? { ...order, status, ...(voidReason ? { voidReason } : {}) } : order);
   }
 
-  async createOrder(orderData: Omit<Order, 'id' | 'createdAt' | 'orderNumber'>): Promise<Order> {
+  async getInventoryAttentionOrders(): Promise<Order[]> {
+    if (!db) throw new Error('Order storage is unavailable.');
+    const snapshot = await getDocs(query(collection(db, 'pos_orders')));
+    return snapshot.docs
+      .map(orderDoc => ({ id: orderDoc.id, ...orderDoc.data() } as Order))
+      .filter(order => order.inventorySyncStatus === 'PENDING' || order.inventorySyncStatus === 'NOT_CONFIGURED')
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  async updateInventorySyncStatus(orderId: string, status: Order['inventorySyncStatus'], error?: string): Promise<void> {
+    if (!db) throw new Error('Order storage is unavailable; inventory sync status could not be saved.');
+    const update = {
+      inventorySyncStatus: status,
+      inventorySyncError: error || '',
+    };
+    await updateDoc(doc(db, 'pos_orders', orderId), update);
+    this.localOrders = this.localOrders.map(order => order.id === orderId ? { ...order, ...update } : order);
+  }
+
+  async createOrder(
+    orderData: Omit<Order, 'id' | 'createdAt' | 'orderNumber'>,
+    orderId: string = `ord_${crypto.randomUUID()}`,
+  ): Promise<Order> {
+    if (!db) throw new Error('Order storage is unavailable. Your cart has been kept.');
     const newOrder: Order = {
       ...orderData,
-      id: `ord_${Date.now()}`,
+      id: orderId,
       orderNumber: `ORD-${Math.floor(10000 + Math.random() * 90000)}`,
       createdAt: new Date().toISOString()
     };
+    // JSON removes optional undefined fields that Firestore rejects, including nested items.
+    const ticket: Ticket = {
+      id: `ticket_${newOrder.id}`,
+      orderId: newOrder.id,
+      orderNumber: newOrder.orderNumber,
+      type: newOrder.orderType || 'DINE_IN',
+      tableNumber: newOrder.tableNumber,
+      customerName: newOrder.customerName,
+      status: 'NEW',
+      priority: 'NORMAL',
+      createdAt: newOrder.createdAt,
+      targetTime: new Date(Date.now() + 20 * 60000).toISOString(),
+      items: newOrder.items.map((item, index) => ({
+        id: `${newOrder.id}_${index}`,
+        productId: item.productId,
+        productName: item.name,
+        size: item.size,
+        quantity: item.quantity,
+        modifiers: item.selectedOption ? [item.selectedOption] : [],
+        notes: item.notes || newOrder.orderNotes,
+        stationId: 'st_1',
+        status: 'PENDING'
+      }))
+    };
+    const batch = writeBatch(db);
+    batch.set(doc(db, 'pos_orders', newOrder.id), JSON.parse(JSON.stringify(newOrder)));
+    batch.set(doc(db, 'tickets', ticket.id), JSON.parse(JSON.stringify(ticket)));
+    await batch.commit();
     this.localOrders.unshift(newOrder);
-    if (db) {
-      try {
-        await setDoc(doc(db, 'pos_orders', newOrder.id), newOrder);
-      } catch (err) {
-        console.warn("Could not save order to Firestore:", err);
-      }
-    }
     return newOrder;
   }
 }

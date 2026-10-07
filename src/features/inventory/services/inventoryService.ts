@@ -262,58 +262,78 @@ class InventoryService {
     }
   }
 
-  async recordTransaction(transactionData: Omit<StockTransaction, 'id' | 'date'>): Promise<StockTransaction> {
-    const newTransaction: StockTransaction = {
-      ...transactionData,
-      id: `txn_${Date.now()}`,
-      date: new Date().toISOString()
-    };
-
-    if (db) {
-      try {
-        await runTransaction(db, async (transaction) => {
-          const itemRef = doc(db, 'inventory_items', newTransaction.itemId);
-          const itemDoc = await transaction.get(itemRef);
-          
-          if (itemDoc.exists()) {
-            const itemData = itemDoc.data() as InventoryItem;
-            const currentStock = itemData.currentStock || 0;
-            let stockChange = 0;
-            
-            switch (newTransaction.type) {
-              case 'STOCK_IN':
-              case 'RETURN':
-              case 'OPENING':
-                stockChange = newTransaction.quantity;
-                break;
-              case 'STOCK_OUT':
-              case 'DAMAGE':
-              case 'WASTAGE':
-              case 'EXPIRY':
-                stockChange = -newTransaction.quantity;
-                break;
-              case 'ADJUSTMENT':
-              case 'PHYSICAL_VERIFICATION':
-                stockChange = newTransaction.quantity;
-                break;
-            }
-
-            const newStock = Math.max(0, currentStock + stockChange);
-            transaction.update(itemRef, { 
-              currentStock: newStock,
-              lastUpdated: new Date().toISOString()
-            });
-          }
-
-          const txnRef = doc(db, 'inventory_transactions', newTransaction.id);
-          transaction.set(txnRef, newTransaction);
-        });
-      } catch (err) {
-        console.warn("Could not record stock transaction in Firestore:", err);
-      }
+  async recordTransaction(
+    transactionData: Omit<StockTransaction, 'id' | 'date'>,
+    idempotencyKey: string = crypto.randomUUID(),
+  ): Promise<StockTransaction> {
+    if (!db) throw new Error('Inventory storage is unavailable. No stock movement was recorded.');
+    if (!idempotencyKey.trim() || idempotencyKey.length > 500) throw new Error('Invalid inventory idempotency key.');
+    if (!Number.isFinite(transactionData.quantity) || transactionData.quantity === 0) {
+      throw new Error('Inventory movement quantity must be a non-zero finite number.');
+    }
+    if (!['ADJUSTMENT', 'PHYSICAL_VERIFICATION'].includes(transactionData.type) && transactionData.quantity < 0) {
+      throw new Error('Inventory movement quantity must be positive for this transaction type.');
     }
 
-    return newTransaction;
+    const movementId = `txn_${encodeURIComponent(idempotencyKey)}`;
+    const newTransaction: StockTransaction = {
+      ...transactionData,
+      id: movementId,
+      date: new Date().toISOString(),
+    };
+    let result = newTransaction;
+
+    await runTransaction(db, async transaction => {
+      const txnRef = doc(db, 'inventory_transactions', movementId);
+      const existingTxn = await transaction.get(txnRef);
+      if (existingTxn.exists()) {
+        const saved = existingTxn.data() as StockTransaction;
+        const sameMovement = saved.itemId === newTransaction.itemId
+          && saved.type === newTransaction.type
+          && saved.quantity === newTransaction.quantity
+          && saved.referenceId === newTransaction.referenceId;
+        if (!sameMovement) throw new Error('Inventory idempotency key was reused for a different stock movement.');
+        result = saved;
+        return;
+      }
+
+      const itemRef = doc(db, 'inventory_items', newTransaction.itemId);
+      const itemDoc = await transaction.get(itemRef);
+      if (!itemDoc.exists()) throw new Error(`Inventory item “${newTransaction.itemId}” does not exist. No stock movement was recorded.`);
+
+      const itemData = itemDoc.data() as InventoryItem;
+      const currentStock = Number(itemData.currentStock ?? 0);
+      if (!Number.isFinite(currentStock)) throw new Error(`Inventory item “${newTransaction.itemId}” has an invalid stock balance.`);
+
+      let stockChange: number;
+      switch (newTransaction.type) {
+        case 'STOCK_IN':
+        case 'RETURN':
+        case 'OPENING':
+          stockChange = newTransaction.quantity;
+          break;
+        case 'STOCK_OUT':
+        case 'DAMAGE':
+        case 'WASTAGE':
+        case 'EXPIRY':
+          stockChange = -newTransaction.quantity;
+          break;
+        case 'ADJUSTMENT':
+        case 'PHYSICAL_VERIFICATION':
+          stockChange = newTransaction.quantity;
+          break;
+        default:
+          throw new Error(`Inventory transaction type “${newTransaction.type}” is not supported by this stock ledger.`);
+      }
+
+      transaction.update(itemRef, {
+        currentStock: currentStock + stockChange,
+        lastUpdated: newTransaction.date,
+      });
+      transaction.set(txnRef, newTransaction);
+    });
+
+    return result;
   }
 }
 

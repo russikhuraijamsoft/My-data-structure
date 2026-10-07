@@ -1,14 +1,17 @@
 import React, { useState } from 'react';
 import { Order } from '../models/pos';
-import { CheckCircle, Printer, X, ChefHat, ReceiptText } from 'lucide-react';
+import { CheckCircle, Printer, X, ChefHat, ReceiptText, AlertTriangle, RotateCw } from 'lucide-react';
 
 interface ReceiptModalProps {
   order: Order;
   onClose: () => void;
+  onRetryInventory?: (order: Order) => Promise<Order>;
 }
 
-export function ReceiptModal({ order, onClose }: ReceiptModalProps) {
+export function ReceiptModal({ order, onClose, onRetryInventory }: ReceiptModalProps) {
   const [activeTab, setActiveTab] = useState<'receipt' | 'kot'>('receipt');
+  const [retryingInventory, setRetryingInventory] = useState(false);
+  const [retryError, setRetryError] = useState('');
 
   const handlePrint = () => {
     window.print();
@@ -71,6 +74,41 @@ export function ReceiptModal({ order, onClose }: ReceiptModalProps) {
 
         {/* Content Body */}
         <div className="flex-1 overflow-y-auto p-6 bg-white">
+          {order.inventorySyncStatus && order.inventorySyncStatus !== 'SYNCED' && (
+            <div role="alert" className="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
+                <div className="flex-1">
+                  <p className="font-black">Payment and order are saved. Do not charge the customer again.</p>
+                  <p className="mt-1">{order.inventorySyncStatus === 'PENDING'
+                    ? 'Stock movements are pending. Retry is safe; already-applied movements will not be deducted twice.'
+                    : 'Inventory is not configured for this sale. Link each menu item to a recipe or tracked stock item, including size-specific recipes.'}</p>
+                  {(order.inventorySyncError || retryError) && <p className="mt-1 text-xs">{retryError || order.inventorySyncError}</p>}
+                  {order.inventorySyncStatus === 'PENDING' && onRetryInventory && (
+                    <button
+                      type="button"
+                      disabled={retryingInventory}
+                      onClick={async () => {
+                        setRetryingInventory(true);
+                        setRetryError('');
+                        try {
+                          await onRetryInventory(order);
+                        } catch (error) {
+                          setRetryError(error instanceof Error ? error.message : String(error));
+                        } finally {
+                          setRetryingInventory(false);
+                        }
+                      }}
+                      className="mt-3 inline-flex items-center gap-2 rounded-lg bg-amber-900 px-3 py-2 font-bold text-white disabled:opacity-50"
+                    >
+                      <RotateCw className={`h-4 w-4 ${retryingInventory ? 'animate-spin' : ''}`} />
+                      {retryingInventory ? 'Retrying…' : 'Retry stock sync'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
           {activeTab === 'receipt' ? (
             <div className="border border-[#ebd5da] rounded-xl p-5 bg-[#fdf5f6]/50 shadow-xs font-mono">
               <div className="text-center pb-4 border-b border-dashed border-[#ebd5da]">

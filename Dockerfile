@@ -17,7 +17,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY package.json package-lock.json* bun.lock* ./
 
 # Install all dependencies (including devDependencies required for vite build)
-RUN npm install
+RUN npm ci
 
 # Copy application source code and configurations
 COPY . .
@@ -46,13 +46,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY package.json package-lock.json* bun.lock* ./
 
 # Install production dependencies only to minimize image size and attack surface
-RUN npm install --omit=dev
+RUN npm ci --omit=dev
 
 # Copy compiled frontend distribution from builder
 COPY --from=builder /app/dist ./dist
 
 # Copy server entrypoint and runtime configs
-COPY server.ts ./
+COPY --from=builder /app/server.js ./
 COPY firebase-applet-config.json ./
 COPY firebase-blueprint.json ./
 
@@ -67,4 +67,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://127.0.0.1:${PORT:-8080}/api/health || exit 1
 
 # Start TalkOS Full-Stack Server
-CMD ["node", "server.ts"]
+CMD ["node", "server.js"]

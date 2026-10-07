@@ -26,7 +26,15 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow read: if isAuthenticated() && (request.auth.uid == userId || isManager());
-      allow write: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      allow create: if isAdmin() || (isAuthenticated() && request.auth.uid == userId
+        && request.resource.data.uid == userId
+        && request.resource.data.roles == []
+        && request.resource.data.permissions == []
+        && request.resource.data.branches == []);
+      allow update: if isAdmin() || (isAuthenticated() && request.auth.uid == userId
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['displayName', 'phoneNumber']));
+      allow delete: if isAdmin();
     }
     
     match /config/{document=**} {
@@ -36,34 +44,38 @@ service cloud.firestore {
     
     match /pos_products/{productId} {
       allow read: if true;
-      allow write: if isAuthenticated();
+      allow write: if isManager();
     }
 
     match /menu_item_sizes/{sizeId} {
       allow read: if true;
-      allow write: if isAuthenticated();
+      allow write: if isManager();
+    }
+
+    function canUsePos() {
+      return isManager() || hasRole('CASHIER');
     }
 
     match /orders/{orderId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated();
+      allow read: if canUsePos() || hasRole('ACCOUNTANT');
+      allow create: if canUsePos();
+      allow update: if canUsePos();
       allow delete: if isAdmin();
     }
 
     match /pos_orders/{orderId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated();
+      allow read: if canUsePos() || hasRole('ACCOUNTANT');
+      allow create: if canUsePos();
+      allow update: if canUsePos();
       allow delete: if isAdmin();
     }
 
     match /tickets/{ticketId} {
-      allow read, write: if isAuthenticated();
+      allow read, write: if canUsePos() || hasRole('KITCHEN');
     }
 
     match /stations/{stationId} {
-      allow read, write: if isAuthenticated();
+      allow read, write: if canUsePos() || hasRole('KITCHEN');
     }
     
     match /inventory/{itemId} {
@@ -79,8 +91,20 @@ service cloud.firestore {
       allow read, write: if isAdmin() || hasRole('ACCOUNTANT');
     }
     
-    match /{document=**} {
-      allow read, write: if isAuthenticated();
+    // Explicit flat collections used by the client. No permissive catch-all:
+    // overlapping Firestore allow rules are ORed, not overridden.
+    match /{collectionName}/{documentId} {
+      allow read, write: if collectionName in ['hr_employees', 'hr_attendance', 'hr_payroll']
+        && (isAdmin() || hasRole('HR'));
+      allow read, write: if collectionName in ['finance_accounts', 'finance_transactions']
+        && (isAdmin() || hasRole('ACCOUNTANT'));
+      allow read, write: if collectionName in ['inventory_categories', 'inventory_warehouses',
+        'inventory_storage_locations', 'inventory_items', 'inventory_batches',
+        'inventory_cycle_counts', 'inventory_transactions', 'manufacturing_recipes', 'manufacturing_orders']
+        && (isManager() || hasRole('INVENTORY'));
+      allow read, write: if collectionName in ['suppliers', 'purchase_orders', 'customers',
+        'promotions', 'table_floors', 'table_items', 'table_reservations', 'table_waitlist', 'reports_metrics']
+        && isManager();
     }
   }
 }

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { usePosStore } from '../store/posStore';
+import { calculateTotals } from '../utils/totals';
 import { Product, ItemSize } from '../models/pos';
 import { Loader2, Plus, Minus, Trash2, ShoppingCart, Sparkles, UtensilsCrossed, Monitor } from 'lucide-react';
 import { SizeSelectorModal } from '../components/SizeSelectorModal';
@@ -13,20 +14,25 @@ export function PosPage() {
     loading, 
     error, 
     lastCompletedOrder,
+    inventoryAttentionOrders,
+    inventoryAttentionError,
+    loadInventoryAttentionOrders,
     loadProducts, 
     addToCart, 
     updateQuantity,
     removeFromCart, 
-    checkout,
+    completeCheckout, retryInventorySync, orderType, setOrderType, tableNumber, setTableNumber,
     clearCompletedOrder
   } = usePosStore();
 
+  const [cashReceived, setCashReceived] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [modalProduct, setModalProduct] = useState<Product | null>(null);
 
   useEffect(() => {
     loadProducts();
-  }, [loadProducts]);
+    void loadInventoryAttentionOrders();
+  }, [loadProducts, loadInventoryAttentionOrders]);
 
   const activeProducts = products.filter(
     p => p.active !== false && p.isAvailable !== false && !p.isSubItem
@@ -63,9 +69,7 @@ export function PosPage() {
     setModalProduct(null);
   };
 
-  const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-  const tax = subtotal * 0.05;
-  const total = subtotal + tax;
+  const { subtotal, tax, total } = calculateTotals(cart, usePosStore.getState().discount);
 
   return (
     <div className="flex h-[calc(100vh-4rem)] bg-white text-[#800000]">
@@ -123,6 +127,33 @@ export function PosPage() {
           <div className="mb-4 text-[#800000] bg-[#fee8eb] border border-[#ebd5da] p-3 rounded-lg font-bold text-sm">
             {error}
           </div>
+        )}
+
+        {(inventoryAttentionOrders.length > 0 || inventoryAttentionError) && (
+          <section className="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950" aria-label="Inventory reconciliation queue">
+            <h2 className="font-black">Inventory needs attention ({inventoryAttentionOrders.length})</h2>
+            {inventoryAttentionError && <p className="mt-1">Could not load the saved inventory queue: {inventoryAttentionError}</p>}
+            {inventoryAttentionOrders.slice(0, 5).map(order => (
+              <div key={order.id} className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-amber-200 pt-2">
+                <div>
+                  <strong>{order.orderNumber}</strong> — {order.inventorySyncStatus === 'PENDING' ? 'stock sync pending' : 'menu recipe/stock mapping required'}
+                  {order.inventorySyncError && <p className="text-xs">{order.inventorySyncError}</p>}
+                </div>
+                {order.inventorySyncStatus === 'PENDING' && (
+                  <button
+                    type="button"
+                    disabled={loading}
+                    onClick={() => { void retryInventorySync(order).catch(() => {}); }}
+                    className="rounded-lg bg-amber-900 px-3 py-2 font-bold text-white disabled:opacity-50"
+                  >Retry stock sync</button>
+                )}
+              </div>
+            ))}
+            {inventoryAttentionOrders.length > 5 && <p className="mt-2 text-xs">Showing 5 of {inventoryAttentionOrders.length}; resolve the older orders before live service.</p>}
+            {inventoryAttentionOrders.some(order => order.inventorySyncStatus === 'NOT_CONFIGURED') && (
+              <p className="mt-2 text-xs">Map each menu item to a recipe or tracked inventory item. Multi-size dishes need size-specific recipes. These orders will not be auto-deducted from guessed quantities.</p>
+            )}
+          </section>
         )}
 
         {/* Catalog Grid */}
@@ -220,9 +251,9 @@ export function PosPage() {
                         <h3 className="font-black text-[#800000] text-sm md:text-base line-clamp-2 group-hover:underline">
                           {product.name}
                         </h3>
-                        {product.comboDescription && (
+                        {(product.description || product.comboDescription) && (
                           <p className="text-xs text-[#800000]/70 mt-1 line-clamp-2">
-                            {product.comboDescription}
+                            {product.description || product.comboDescription}
                           </p>
                         )}
                       </div>
@@ -368,13 +399,25 @@ export function PosPage() {
             </div>
           </div>
 
+          <div className="mb-3 space-y-2">
+            <label className="block text-sm">Order type
+              <select aria-label="Order type" disabled={loading} value={orderType} onChange={e => setOrderType(e.target.value as typeof orderType)} className="ml-2 border rounded p-1">
+                <option value="DINE_IN">Dine in</option><option value="TAKEAWAY">Takeaway</option><option value="DELIVERY">Delivery</option>
+              </select>
+            </label>
+            {orderType === 'DINE_IN' && <label className="block text-sm">Table <input aria-label="Table" disabled={loading} value={tableNumber} onChange={e => setTableNumber(e.target.value)} className="border rounded p-1" /></label>}
+            <label className="block text-sm">Cash received (₹)
+              <input aria-label="Cash received" type="number" min={0} step="0.01" disabled={loading} value={cashReceived} onChange={e => setCashReceived(e.target.value)} className="w-full border rounded p-2" />
+            </label>
+            <p className="text-sm">Change: ₹{Math.max(0, Number(cashReceived || 0) - total).toFixed(2)}</p>
+          </div>
           <button 
-            onClick={() => checkout()}
-            disabled={cart.length === 0 || loading}
+            onClick={() => void completeCheckout({ method: 'CASH', details: { method: 'CASH', cashTendered: Number(cashReceived), changeDue: Math.max(0, Number(cashReceived) - total) } }).then(() => setCashReceived('')).catch(() => {})}
+            disabled={cart.length === 0 || loading || !cashReceived || Number(cashReceived) < total}
             className="w-full bg-[#800000] hover:bg-[#680016] text-white font-black py-3.5 rounded-xl flex items-center justify-center disabled:opacity-50 transition-colors shadow-xs cursor-pointer text-base"
           >
             {loading ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : null}
-            Charge ₹{total.toFixed(2)}
+            Record cash payment ₹{total.toFixed(2)}
           </button>
         </div>
       </div>
@@ -393,6 +436,7 @@ export function PosPage() {
         <ReceiptModal
           order={lastCompletedOrder}
           onClose={clearCompletedOrder}
+          onRetryInventory={retryInventorySync}
         />
       )}
     </div>

@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import { Product, OrderItem, Order, ItemSize, KioskAddon } from '../../pos/models/pos';
 import { posService } from '../../pos/services/posService';
-import { kdsService } from '../../kds/services/kdsService';
 import { kioskAudio } from '../utils/kioskAudio';
 
 export type KioskStep = 'ATTRACT' | 'MENU' | 'CART' | 'PAYMENT' | 'SUCCESS';
@@ -261,116 +260,13 @@ export const useKioskStore = create<KioskState>((set, get) => ({
     set({ terminalPin: '' });
   },
 
-  submitTerminalPin: async () => {
-    const { terminalPin } = get();
-    if (terminalPin.length !== 4) return;
-    set({ terminalStep: 'PROCESSING', isProcessingPayment: true });
-    
-    // Simulate Pine Labs transaction authorization
-    await new Promise(r => setTimeout(r, 1400));
-    kioskAudio.playPineLabsBeep('approved');
-    set({ terminalStep: 'APPROVED' });
-
-    // Complete order creation
-    await get()._finalizeKioskOrder('CARD');
-  },
-
-  simulateUpiPayment: async () => {
-    set({ isProcessingPayment: true });
-    kioskAudio.playPineLabsBeep('pin');
-    await new Promise(r => setTimeout(r, 1500));
-    kioskAudio.playPineLabsBeep('approved');
-    await get()._finalizeKioskOrder('UPI');
-  },
-
-  processCashPayment: async () => {
-    set({ isProcessingPayment: true });
-    kioskAudio.playTouch();
-    await new Promise(r => setTimeout(r, 800));
-    await get()._finalizeKioskOrder('CASH');
-  },
+  submitTerminalPin: async () => { set({ terminalStep: 'DECLINED', terminalPin: '', isProcessingPayment: false }); },
+  simulateUpiPayment: async () => { set({ terminalStep: 'DECLINED', isProcessingPayment: false }); },
+  processCashPayment: async () => { set({ terminalStep: 'DECLINED', isProcessingPayment: false }); },
 
   _finalizeKioskOrder: async (paymentMethod: 'UPI' | 'CARD' | 'CASH') => {
-    const { cart, diningMode, tableNumber, specialInstructions } = get();
-    if (cart.length === 0) return;
-
-    try {
-      const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-      const cgst = subtotal * 0.025;
-      const sgst = subtotal * 0.025;
-      const tax = cgst + sgst;
-      const total = Math.round((subtotal + tax) * 100) / 100;
-
-      const currentToken = `K-${tokenCounter++}`;
-
-      const order = await posService.createOrder({
-        items: cart,
-        orderType: diningMode,
-        tableNumber: diningMode === 'DINE_IN' ? tableNumber : undefined,
-        customerName: `Kiosk Guest (${currentToken})`,
-        orderNotes: specialInstructions.trim() || undefined,
-        subtotal,
-        tax,
-        cgst,
-        sgst,
-        total,
-        paymentMethod,
-        paymentDetails: {
-          method: paymentMethod,
-          cardType: paymentMethod === 'CARD' ? 'Pine Labs Visa/RuPay Contactless' : undefined,
-          upiReference: paymentMethod === 'UPI' ? `UPI_${Date.now().toString().slice(-8)}` : undefined
-        },
-        cashierName: 'Self-Service Kiosk #01',
-        status: 'PAID'
-      });
-
-      // Push instantly to Kitchen Display System (KDS)
-      try {
-        await kdsService.createTicket({
-          orderId: order.id,
-          orderNumber: `${currentToken} (${order.orderNumber})`,
-          type: diningMode,
-          tableNumber: diningMode === 'DINE_IN' ? tableNumber : 'Takeaway Counter',
-          customerName: `Kiosk Order ${currentToken}`,
-          status: 'NEW',
-          priority: 'NORMAL',
-          targetTime: new Date(Date.now() + 15 * 60000).toISOString(),
-          items: cart.map((item, idx) => ({
-            id: `kiosk_ti_${order.id}_${idx}`,
-            productId: item.productId,
-            productName: item.selectedOption 
-              ? `${item.name} (${item.selectedOption})`
-              : (item.size && item.size !== 'Standard' ? `${item.name} • ${item.size}` : item.name),
-            size: item.size,
-            quantity: item.quantity,
-            modifiers: [
-              ...(item.selectedOption ? [item.selectedOption] : []),
-              ...(item.selectedDrink ? [`Drink: ${item.selectedDrink}`] : []),
-              ...(item.selectedAddons ? item.selectedAddons.map(a => a.name) : [])
-            ],
-            notes: item.notes || specialInstructions || undefined,
-            stationId: 'st_1',
-            status: 'PENDING'
-          }))
-        });
-      } catch (kdsErr) {
-        console.warn('Could not dispatch kiosk ticket to KDS:', kdsErr);
-      }
-
-      kioskAudio.playOrderSuccess();
-
-      set({
-        step: 'SUCCESS',
-        lastOrder: order,
-        tokenNumber: currentToken,
-        isProcessingPayment: false,
-        terminalStep: 'IDLE',
-        terminalPin: ''
-      });
-    } catch (err: unknown) {
-      console.error('Error in kiosk checkout:', err);
-      set({ isProcessingPayment: false, terminalStep: 'DECLINED' });
-    }
+    set({ isProcessingPayment: false, terminalStep: 'DECLINED' });
+    throw new Error('Kiosk payment integration is not configured. Please order at the staffed POS.');
   },
 
   resetToAttract: () => {

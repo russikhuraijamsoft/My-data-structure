@@ -13,7 +13,7 @@ export function AiAssistant() {
     {
       id: '1',
       sender: 'ai',
-      text: 'Hello! I am your TalkOS Enterprise Operations Assistant. Ask me anything regarding today\'s POS sales, kitchen prep throughput, stock levels, or margin projections.',
+      text: 'Hello! I am your TalkOS Enterprise Operations Assistant. I can help with operational questions. Live business data is not connected to this chat yet.',
       timestamp: new Date().toISOString()
     }
   ]);
@@ -30,7 +30,7 @@ export function AiAssistant() {
   }, [messages, isTyping]);
 
   const handleSend = () => {
-    if (!input.trim()) return;
+    if (!input.trim() || isTyping) return;
 
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
@@ -49,15 +49,14 @@ export function AiAssistant() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         prompt: currentQuery,
-        context: {
-          restaurant: 'TalkOS Main Downtown',
-          revenueToday: '₹6,00,000',
-          activeTickets: 8,
-          criticalInventory: ['Fresh Noodles', 'Avocado', 'Sirloin Steak']
-        }
+        context: { restaurant: 'Talk of the Town', liveDataAvailable: false }
       })
     })
-      .then(res => res.json())
+      .then(async res => {
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'AI assistance is unavailable. Please try again later.');
+        return data;
+      })
       .then(data => {
         const reply = data.reply || `Operational insight generated for "${currentQuery}".`;
         const aiResponse: ChatMessage = {
@@ -68,13 +67,8 @@ export function AiAssistant() {
         };
         setMessages(prev => [...prev, aiResponse]);
       })
-      .catch(() => {
-        let reply = `Based on current live data for "${currentQuery}": Restaurant revenue is tracking 12.5% ahead of yesterday. Best performing item is Chicken Chowmein (Medium). Food cost percentage is well controlled at 28.5%.`;
-        if (currentQuery.toLowerCase().includes('sale')) {
-          reply = `Today's revenue stands at ₹6,00,000 across 124 completed orders, with an average ticket of ₹4,838. Dine-in volume accounts for 68% of total billing.`;
-        } else if (currentQuery.toLowerCase().includes('inventory') || currentQuery.toLowerCase().includes('stock')) {
-          reply = `4 raw materials have breached reorder levels: Fresh Noodles, Avocado, Sirloin Steak, and Tomatoes. Automated POs have been drafted for supplier review.`;
-        }
+      .catch((error) => {
+        const reply = error instanceof Error ? error.message : 'AI assistance is unavailable. No live business data was retrieved.';
         const aiResponse: ChatMessage = {
           id: (Date.now() + 1).toString(),
           sender: 'ai',

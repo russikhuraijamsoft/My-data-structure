@@ -21,92 +21,59 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const setBranchId = useAppStore(state => state.setBranchId);
-  const currentBranchId = useAppStore(state => state.branchId);
 
   useEffect(() => {
     if (!auth) {
-      // Demo fallback so the user can immediately experience the ERP interface
-      const demoUser = {
-        uid: 'demo_owner_1',
-        email: 'russi.khuraijam@gmail.com',
-        displayName: 'Russi Khuraijam',
-      };
-      setUser(demoUser);
-      setProfile({
-        uid: demoUser.uid,
-        email: demoUser.email,
-        phoneNumber: '+919876543210',
-        displayName: demoUser.displayName,
-        roles: ['OWNER', 'ADMIN', 'MANAGER', 'CASHIER', 'KITCHEN', 'INVENTORY', 'HR', 'ACCOUNTANT'],
-        permissions: ['*'],
-        branches: ['Downtown Main'],
-        defaultBranch: 'Downtown Main',
-        createdAt: new Date().toISOString()
-      });
+      setUser(null);
+      setProfile(null);
       setLoading(false);
       return;
     }
 
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      setUser(currentUser);
-      if (currentUser) {
-        try {
-          const userProfile = await authService.getUserProfile(currentUser.uid);
-          if (userProfile) {
-            setProfile(userProfile);
-            if (userProfile.defaultBranch && !currentBranchId) {
-              setBranchId(userProfile.defaultBranch);
-            }
-          } else {
-            setProfile({
-              uid: currentUser.uid,
-              email: currentUser.email,
-              phoneNumber: currentUser.phoneNumber,
-              displayName: currentUser.displayName || 'Authenticated User',
-              roles: ['OWNER', 'ADMIN', 'MANAGER', 'CASHIER', 'KITCHEN', 'INVENTORY', 'HR', 'ACCOUNTANT'],
-              permissions: ['*'],
-              branches: ['Downtown Main'],
-              createdAt: new Date().toISOString()
-            });
+    let active = true;
+    let revision = 0;
+
+    // Handle redirect result on app load (for mobile/Capacitor)
+    authService.handleRedirectResult().then((user) => {
+      if (user && active) {
+        setUser(user);
+        setProfile(null);
+        setLoading(true);
+        authService.getUserProfile(user.uid).then((profile) => {
+          if (active) {
+            setProfile(profile);
+            setLoading(false);
           }
-          logger.info('User authenticated', { uid: currentUser.uid });
-        } catch (error) {
-          logger.warn('Failed to retrieve user profile, using fallback profile', error);
-          setProfile({
-            uid: currentUser.uid,
-            email: currentUser.email,
-            phoneNumber: currentUser.phoneNumber,
-            displayName: currentUser.displayName || 'Authenticated User',
-            roles: ['OWNER', 'ADMIN', 'MANAGER'],
-            permissions: ['*'],
-            branches: ['Downtown Main'],
-            createdAt: new Date().toISOString()
-          });
-        }
-      } else {
-        // Provide mock user session for dev exploration if not logged in
-        setProfile({
-          uid: 'demo_owner_1',
-          email: 'russi.khuraijam@gmail.com',
-          phoneNumber: '+919876543210',
-          displayName: 'Russi Khuraijam',
-          roles: ['OWNER', 'ADMIN', 'MANAGER', 'CASHIER', 'KITCHEN', 'INVENTORY', 'HR', 'ACCOUNTANT'],
-          permissions: ['*'],
-          branches: ['Downtown Main'],
-          defaultBranch: 'Downtown Main',
-          createdAt: new Date().toISOString()
-        });
-        setUser({
-          uid: 'demo_owner_1',
-          email: 'russi.khuraijam@gmail.com',
-          displayName: 'Russi Khuraijam',
+        }).catch(() => {
+          if (active) setLoading(false);
         });
       }
-      setLoading(false);
+    }).catch(() => {});
+
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      const requestRevision = ++revision;
+      setUser(currentUser);
+      setProfile(null);
+      setLoading(true);
+      try {
+        const userProfile = currentUser
+          ? await authService.getUserProfile(currentUser.uid)
+          : null;
+        if (!active || requestRevision !== revision) return;
+        setProfile(userProfile);
+        const branches = userProfile?.branches || [];
+        if (!branches.includes(useAppStore.getState().branchId || '')) {
+          setBranchId(branches.includes(userProfile?.defaultBranch || '') ? userProfile!.defaultBranch! : branches[0] || '');
+        }
+      } catch (error) {
+        logger.warn('Failed to retrieve user profile', error);
+      } finally {
+        if (active && requestRevision === revision) setLoading(false);
+      }
     });
 
-    return unsubscribe;
-  }, [setBranchId, currentBranchId]);
+    return () => { active = false; unsubscribe(); };
+  }, [setBranchId]);
 
   const logout = async () => {
     if (auth) {

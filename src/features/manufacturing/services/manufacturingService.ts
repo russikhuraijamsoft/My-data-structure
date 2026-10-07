@@ -7,96 +7,13 @@ class ManufacturingService {
   private ordersCollection = 'manufacturing_orders';
 
   async getRecipes(): Promise<Recipe[]> {
-    if (!db) {
-      return [
-        {
-          id: 'r1',
-          name: 'Classic Chicken Chowmein Base',
-          description: 'Wok-tossed noodles with shredded chicken and oriental seasoning',
-          categoryId: 'chowmein',
-          version: '1.0',
-          status: 'ACTIVE',
-          yieldQuantity: 10,
-          yieldUnit: 'portions',
-          servingSize: '1 portion',
-          prepTimeMinutes: 15,
-          cookTimeMinutes: 10,
-          shelfLifeDays: 1,
-          ingredients: [
-            { id: 'i1', inventoryItemId: 'inv1', itemName: 'Fresh Noodles', quantity: 2, unit: 'kg', isOptional: false, costPerUnit: 90 },
-            { id: 'i2', inventoryItemId: 'inv2', itemName: 'Chicken Breast', quantity: 1, unit: 'kg', isOptional: false, costPerUnit: 250 }
-          ],
-          instructions: [
-            { step: 1, description: 'Boil and strain noodles with touch of oil', timeMinutes: 5 },
-            { step: 2, description: 'Wok fry chicken with aromatics and toss', timeMinutes: 10 }
-          ],
-          costing: {
-            ingredientsCost: 435,
-            gasCost: 6.32,
-            electricityCost: 1.00,
-            waterCost: 0.50,
-            labourCost: 37.50,
-            packagingCost: 5.00,
-            overheadCost: 2.00,
-            totalCost: 487.32,
-            sellingPrice: 700,
-            costPerPortion: 48.73,
-            grossProfit: 212.68,
-            marginPercentage: 30.4
-          },
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        }
-      ];
-    }
+    if (!db) throw new Error('Recipe storage is unavailable.');
     try {
       const q = query(collection(db, this.recipesCollection), orderBy('updatedAt', 'desc'));
       const snapshot = await getDocs(q);
-      if (snapshot.empty) {
-        return [
-          {
-            id: 'r1',
-            name: 'Classic Chicken Chowmein Base',
-            description: 'Wok-tossed noodles with shredded chicken and oriental seasoning',
-            categoryId: 'chowmein',
-            version: '1.0',
-            status: 'ACTIVE',
-            yieldQuantity: 10,
-            yieldUnit: 'portions',
-            servingSize: '1 portion',
-            prepTimeMinutes: 15,
-            cookTimeMinutes: 10,
-            shelfLifeDays: 1,
-            ingredients: [
-              { id: 'i1', inventoryItemId: 'inv1', itemName: 'Fresh Noodles', quantity: 2, unit: 'kg', isOptional: false, costPerUnit: 90 },
-              { id: 'i2', inventoryItemId: 'inv2', itemName: 'Chicken Breast', quantity: 1, unit: 'kg', isOptional: false, costPerUnit: 250 }
-            ],
-            instructions: [
-              { step: 1, description: 'Boil and strain noodles with touch of oil', timeMinutes: 5 },
-              { step: 2, description: 'Wok fry chicken with aromatics and toss', timeMinutes: 10 }
-            ],
-            costing: {
-              ingredientsCost: 435,
-              gasCost: 6.32,
-              electricityCost: 1.00,
-              waterCost: 0.50,
-              labourCost: 37.50,
-              packagingCost: 5.00,
-              overheadCost: 2.00,
-              totalCost: 487.32,
-              sellingPrice: 700,
-              costPerPortion: 48.73,
-              grossProfit: 212.68,
-              marginPercentage: 30.4
-            },
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-          }
-        ];
-      }
-      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Recipe));
-    } catch {
-      return [];
+      return snapshot.docs.map(recipeDoc => ({ id: recipeDoc.id, ...recipeDoc.data() } as Recipe));
+    } catch (error) {
+      throw new Error(`Could not load inventory recipes: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 

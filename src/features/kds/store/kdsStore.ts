@@ -7,6 +7,7 @@ interface KdsState {
   tickets: Ticket[];
   activeStationId: string | null;
   loading: boolean;
+  error: string | null;
 
   loadStations: () => Promise<void>;
   setActiveStation: (stationId: string | null) => void;
@@ -22,6 +23,7 @@ export const useKdsStore = create<KdsState>((set, get) => ({
   tickets: [],
   activeStationId: null,
   loading: false,
+  error: null,
 
   loadStations: async () => {
     set({ loading: true });
@@ -44,23 +46,29 @@ export const useKdsStore = create<KdsState>((set, get) => ({
   subscribeToTickets: () => {
     const unsubscribe = kdsService.subscribeToTickets(
       get().activeStationId,
-      (tickets) => set({ tickets }),
-      (error) => console.error("Ticket subscription error:", error)
+      (tickets) => set({ tickets, error: null }),
+      (error) => set({ tickets: [], error: error.message })
     );
     return unsubscribe;
   },
 
   updateTicketStatus: async (ticketId, status) => {
-    get()._optimisticUpdateTicketStatus(ticketId, status);
-    await kdsService.updateTicketStatus(ticketId, status);
+    try {
+      await kdsService.updateTicketStatus(ticketId, status);
+      set({ error: null });
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : 'Could not update ticket.' });
+    }
   },
 
   updateItemStatus: async (ticketId, itemId, status) => {
-    get()._optimisticUpdateItemStatus(ticketId, itemId, status);
-    
     const ticket = get().tickets.find(t => t.id === ticketId);
-    if (ticket) {
+    if (!ticket) return;
+    try {
       await kdsService.updateItemStatus(ticketId, itemId, status, ticket.items);
+      set({ error: null });
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : 'Could not update item.' });
     }
   },
 

@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -96,7 +97,7 @@ app.post('/api/ai/chat', async (req, res) => {
 
   const systemInstruction = `You are the TalkOS Restaurant Operating System Intelligence Engine. 
 You provide concise, executive operational insights for restaurant managers, head chefs, and accountants.
-Currency is Indian Rupee (₹ INR). Focus on practical answers regarding sales velocity, inventory reorder thresholds, kitchen throughput, recipe food cost margins, and table turns.`;
+Never invent business figures. If context does not contain verified data, say that data is unavailable. Currency is Indian Rupee (₹ INR). Focus on practical answers regarding sales velocity, inventory reorder thresholds, kitchen throughput, recipe food cost margins, and table turns.`;
 
   if (genAiClient) {
     try {
@@ -115,20 +116,8 @@ Currency is Indian Rupee (₹ INR). Focus on practical answers regarding sales v
     }
   }
 
-  // Graceful contextual fallback if key is not configured or rate-limited
-  let fallbackReply = `[TalkOS Offline Engine] Live operational summary for "${prompt}": Daily revenue is on pace (+12.4% vs baseline). Food cost ratio is controlled at 28.5%.`;
-  const lower = prompt.toLowerCase();
-  if (lower.includes('sale') || lower.includes('revenue')) {
-    fallbackReply = `Today's gross sales stand at ₹6,00,000 across 124 completed tickets. Dine-in volume accounts for 68% of billings, with counter takeout contributing 32%. Average ticket size is ₹4,838.`;
-  } else if (lower.includes('stock') || lower.includes('inventory')) {
-    fallbackReply = `4 items are currently at or below minimum threshold: Fresh Noodles (45kg left), Avocados (12kg left), Sirloin Steak (18kg left), and Cooking Gas (LPG cylinder #2 at 15%). Purchase requisitions are ready for approval.`;
-  } else if (lower.includes('margin') || lower.includes('profit') || lower.includes('recipe')) {
-    fallbackReply = `Highest margin item is Cold Brew Coffee (82% gross margin). Lowest margin item is Family Grill Platter (41% margin due to imported cheese prices). Menu re-engineering is recommended.`;
-  }
-
-  return res.json({
-    reply: fallbackReply,
-    model: 'talkos-embedded-ops'
+  return res.status(503).json({
+    error: 'AI assistance is unavailable. No live business figures have been generated. Please check the AI configuration or try again later.'
   });
 });
 

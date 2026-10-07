@@ -16,7 +16,7 @@ export function LoginPage() {
     setLoading(true);
     try {
       await authService.loginWithEmail(email, password);
-      navigate('/');
+      // AuthContext will handle navigation when auth state changes
     } catch (err: any) {
       setError(err.message || 'Failed to login');
     } finally {
@@ -29,7 +29,7 @@ export function LoginPage() {
     setLoading(true);
     try {
       await authService.loginWithGoogle();
-      navigate('/');
+      // AuthContext will handle navigation when auth state changes
     } catch (err: any) {
       setError(err.message || 'Failed to login with Google');
       setLoading(false);
@@ -41,7 +41,7 @@ export function LoginPage() {
     setLoading(true);
     try {
       await authService.loginWithApple();
-      navigate('/');
+      // AuthContext will handle navigation when auth state changes
     } catch (err: any) {
       setError(err.message || 'Failed to login with Apple');
       setLoading(false);
