@@ -3,6 +3,9 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
 import { GoogleGenAI } from '@google/genai';
+import compression from 'compression';
+import rateLimit from 'express-rate-limit';
+import helmet from 'helmet';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -11,7 +14,12 @@ const app = express();
 const isProduction = process.env.NODE_ENV === 'production';
 const PORT = isProduction ? parseInt(process.env.PORT || '8080', 10) : 3000;
 
-app.use(express.json());
+app.set('trust proxy', 1);
+app.disable('x-powered-by');
+// CSP needs tuning for Firebase and Google authentication popups and APIs.
+app.use(helmet({ contentSecurityPolicy: false }));
+app.use(compression());
+app.use(express.json({ limit: '100kb' }));
 
 // Initialize Google GenAI if key is present
 const geminiApiKey = process.env.GEMINI_API_KEY || '';
@@ -43,18 +51,6 @@ app.get('/api/health', (req, res) => {
     version: '1.0.0',
     timestamp: new Date().toISOString(),
     uptimeSeconds: Math.floor(process.uptime()),
-    memoryUsage: process.memoryUsage(),
-    nodeVersion: process.version,
-    platform: 'Google Cloud Run',
-    gcp: {
-      projectId: process.env.GCP_PROJECT_ID || appletConfig.projectId || 'cricket-closet-imphal',
-      region: process.env.GCP_REGION || 'asia-southeast1',
-      firestoreDatabaseId: process.env.VITE_FIREBASE_DATABASE_ID || appletConfig.firestoreDatabaseId || 'ai-studio-talkosarchitectu-438c4707-59bb-4b28-aa84-26b8ca15c574',
-      storageBucket: appletConfig.storageBucket || 'cricket-closet-imphal.firebasestorage.app',
-      cloudRunPort: PORT,
-      aiModel: 'gemini-2.5-flash',
-      hasGeminiApiKey: Boolean(geminiApiKey)
-    }
   });
 });
 
@@ -88,10 +84,18 @@ app.get('/api/gcloud/status', (req, res) => {
 });
 
 // Server-side Gemini AI Chat Proxy Endpoint
-app.post('/api/ai/chat', async (req, res) => {
+app.post('/api/ai/chat', rateLimit({
+  windowMs: 60 * 1000,
+  limit: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+}), async (req, res) => {
   const { prompt, context } = req.body;
   if (!prompt || typeof prompt !== 'string') {
     return res.status(400).json({ error: 'Prompt is required' });
+  }
+  if (prompt.length > 4000) {
+    return res.status(400).json({ error: 'Prompt must not exceed 4000 characters' });
   }
 
   const systemInstruction = `You are the TalkOS Restaurant Operating System Intelligence Engine. 
@@ -132,6 +136,10 @@ Currency is Indian Rupee (₹ INR). Focus on practical answers regarding sales v
   });
 });
 
+app.use('/api', (req, res) => {
+  res.status(404).json({ error: 'Not found' });
+});
+
 // Setup Vite in development or static serving in production
 async function startServer() {
   if (!isProduction) {
@@ -143,17 +151,59 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     const distPath = path.resolve(__dirname, 'dist');
-    app.use(express.static(distPath));
+    app.use('/assets', express.static(path.resolve(distPath, 'assets'), {
+      maxAge: '1y',
+      immutable: true,
+    }));
+    app.use(express.static(distPath, {
+      setHeaders(res, filePath) {
+        if (path.basename(filePath) === 'index.html') {
+          res.setHeader('Cache-Control', 'no-cache');
+        }
+      },
+    }));
     app.get('*', (req, res) => {
-      res.sendFile(path.resolve(distPath, 'index.html'));
+      res.sendFile(path.resolve(distPath, 'index.html'), {
+        headers: { 'Cache-Control': 'no-cache' },
+      });
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`[TalkOS Server] Running in ${isProduction ? 'production' : 'development'} mode on port ${PORT} (0.0.0.0)`);
     console.log(`[TalkOS Server] Cloud Run Health Check: http://0.0.0.0:${PORT}/api/health`);
   });
 }
+
+let server: ReturnType<typeof app.listen> | null = null;
+let shuttingDown = false;
+
+function shutdown(signal: string) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`[TalkOS Server] ${signal} received, shutting down`);
+  if (!server) {
+    process.exit(0);
+    return;
+  }
+
+  const forceExitTimeout = setTimeout(() => {
+    console.error('[TalkOS Server] Shutdown timed out after 10 seconds');
+    process.exit(1);
+  }, 10_000);
+
+  server.close((err) => {
+    clearTimeout(forceExitTimeout);
+    if (err) {
+      console.error('[TalkOS Server] Error during shutdown:', err);
+      process.exit(1);
+    }
+    process.exit(0);
+  });
+}
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
 
 startServer().catch((err) => {
   console.error('Failed to start server:', err);
